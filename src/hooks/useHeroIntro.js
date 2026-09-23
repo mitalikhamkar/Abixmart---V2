@@ -3,34 +3,25 @@ import { gsap } from '@/lib/gsap';
 
 /**
  * Hero intro timeline — runs once when Home mounts, then stops.
+ * Same sequence as before (background settle → product fades into a
+ * temp spot → text reveals → product sweeps into final position →
+ * idle float loop starts), PLUS two additions:
  *
- * Sequence:
- *  1. Background settles in.
- *  2. Product fades into a temporary position on the upper-left of the
- *     scene (softer, smaller, blurred) — clear of the text block entirely.
- *  3. Left content reveals while the product waits in that temp spot.
- *  4. Product sweeps in one smooth, continuous diagonal motion from the
- *     left side of the screen down to its final foreground position on
- *     the right, decelerating into a soft landing at the very end.
- *  5. Grounding shadow fades in as it lands. Scroll cue fades in. Done.
- *
- * IMPORTANT: the starting offset is computed from the ACTUAL viewport
- * size at runtime (window.innerWidth/innerHeight), not a percentage of
- * the small product element itself. A percentage of the product's own
- * ~300px width only moved it ~50px — barely a nudge, and it landed the
- * product overlapping the text/CTA area instead of starting from the
- * left side of the screen. Computing from viewport size fixes both the
- * visible travel distance and keeps it correctly responsive on any
- * screen width, recalculated fresh on every mount/refresh.
- *
- * Only two travel stages (not several short stitched ones) with matched
- * easing, so the motion reads as one continuous, smooth sweep rather
- * than a jerky, multi-step animation.
+ *  - `idleFloat` ref: the mount-time idle float tween is stored here
+ *    (instead of being fire-and-forget) so Hero.jsx can kill/recreate
+ *    it around each product-switch transition without fighting this
+ *    timeline.
+ *  - Scroll interaction: a scrub-linked parallax on the background and
+ *    product, using `scrollTrigger` (already used elsewhere, e.g.
+ *    FeaturedProduct.jsx) — separate GSAP tweens on different transform
+ *    channels (yPercent) than the ones this timeline uses (x/y/scale),
+ *    so the two never fight over the same animated property.
  */
 export function useHeroIntro(refs) {
   useGSAP(
     () => {
       const {
+        container,
         background,
         productWrap,
         productImage,
@@ -42,6 +33,7 @@ export function useHeroIntro(refs) {
         primaryCta,
         secondaryCta,
         scrollHint,
+        idleFloat,
       } = refs;
 
       const vw = window.innerWidth;
@@ -86,13 +78,6 @@ export function useHeroIntro(refs) {
 
       gsap.set(scrollHint.current, { opacity: 0 });
 
-      // Starting offset relative to the FINAL position, computed from the
-      // real viewport so it's correctly responsive on any screen size:
-      //  - desktop: starts well over on the LEFT side of the screen and
-      //    higher up, clear of the text block, then sweeps down-right.
-      //  - mobile: product already lives in its own dedicated zone above
-      //    the text, so it only needs a short, mostly vertical/diagonal
-      //    offset — not a full screen-width traversal.
       const startX = isMobile ? 24 : -(vw * 0.46);
       const startY = isMobile ? -32 : -(vh * 0.3);
       const startRotation = isMobile ? -4 : -6;
@@ -116,10 +101,7 @@ export function useHeroIntro(refs) {
       // Phase 1 — scene appears.
       tl.to(background.current, { scale: 1, opacity: 1, duration: 0.8 }, 0);
 
-      // Phase 2 — product fades into its temporary position: present,
-      // visibly not final — softer, smaller, blurred. It does not move
-      // yet, it just becomes visible where it already sits (left/upper,
-      // clear of the text).
+      // Phase 2 — product fades into its temporary position.
       if (hasProduct) {
         tl.to(
           productImage.current,
@@ -137,19 +119,12 @@ export function useHeroIntro(refs) {
         .to(primaryCta.current, { opacity: 1, y: 0, duration: 0.4 }, textStart + 0.9)
         .to(secondaryCta.current, { opacity: 1, y: 0, duration: 0.4 }, textStart + 1.03);
 
-      // Phase 4 — one smooth, continuous diagonal sweep from the left/
-      // upper temp position to the final foreground spot, then a short
-      // deceleration into the landing. Two stages sharing the same
-      // easing family so the motion reads as one fluid arc, not several
-      // stitched moves.
+      // Phase 4 — one smooth, continuous diagonal sweep into final position.
       if (hasProduct) {
         const arcStart = 1.9;
         const mainDuration = isMobile ? 0.9 : 1.35;
         const settleDuration = isMobile ? 0.4 : 0.55;
 
-        // Main sweep — covers ~85% of the journey, smooth ease-in-out so
-        // it accelerates gently away from the temp position and starts
-        // decelerating before the final stage takes over.
         tl.to(
           productWrap.current,
           { x: startX * 0.14, y: startY * 0.12, rotation: startRotation * 0.15, duration: mainDuration, ease: 'power2.inOut' },
@@ -160,8 +135,6 @@ export function useHeroIntro(refs) {
           arcStart
         );
 
-        // Final settle — the last short stretch, softly decelerating
-        // into the exact final position ("landing").
         tl.to(
           productWrap.current,
           { x: 0, y: 0, rotation: 0, duration: settleDuration, ease: 'power3.out' },
@@ -185,17 +158,38 @@ export function useHeroIntro(refs) {
       const endTime = tl.duration();
       tl.to(scrollHint.current, { opacity: 1, duration: 0.4 }, Math.max(endTime - 0.1, 0));
 
-      // The ONLY thing that continues after the intro.
+      // Idle float — stored on the shared ref so Hero.jsx can kill it
+      // before a product-switch transition and recreate it after.
       if (hasProduct) {
         tl.call(() => {
-          gsap.to(productImage.current, {
-            y: isMobile ? -2 : -5,
-            duration: 3.6,
-            ease: 'sine.inOut',
-            yoyo: true,
-            repeat: -1,
-          });
+          if (idleFloat) {
+            idleFloat.current = gsap.to(productImage.current, {
+              y: isMobile ? -2 : -5,
+              duration: 3.6,
+              ease: 'sine.inOut',
+              yoyo: true,
+              repeat: -1,
+            });
+          }
         });
+      }
+
+      // NEW — subtle scroll interaction. Scrubbed directly to scroll
+      // position (not autoplaying), on yPercent only, so it composites
+      // cleanly alongside the x/y tweens above rather than overwriting them.
+      if (container?.current) {
+        gsap.to(background.current, {
+          yPercent: 12,
+          ease: 'none',
+          scrollTrigger: { trigger: container.current, start: 'top top', end: 'bottom top', scrub: true },
+        });
+        if (hasProduct) {
+          gsap.to(productWrap.current, {
+            yPercent: -18,
+            ease: 'none',
+            scrollTrigger: { trigger: container.current, start: 'top top', end: 'bottom top', scrub: true },
+          });
+        }
       }
     },
     { scope: refs.container }

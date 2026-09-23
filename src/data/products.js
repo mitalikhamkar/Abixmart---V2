@@ -35,6 +35,33 @@ export const PRODUCT_HERO_IMAGE = shilajitJarBox;
 // Real Himalayan environment photo for the hero background (supplied by you).
 export const HERO_BACKGROUND_IMAGE = heroBg;
 
+// NEW — dynamic hero product set for dev/testing the GSAP product-switch
+// transition. Product 1 is the real approved Shilajit asset. Products 2
+// and 3 are TEMPORARY placeholders only, reusing existing catalog images
+// (Ashwagandha, Triphala) so nothing fake gets generated. Swap the
+// `image` values here whenever real cutout photography for those two
+// exists — no other file needs to change.
+export const heroProducts = [
+  {
+    id: 'shilajit',
+    name: 'Himalayan Shilajit',
+    image: heroJarCutout,
+    isPlaceholder: false,
+  },
+  {
+    id: 'ashwagandha',
+    name: 'Ashwagandha',
+    image: ashwagandhaImg, // TEMP — placeholder only, for transition testing
+    isPlaceholder: true,
+  },
+  {
+    id: 'triphala',
+    name: 'Triphala',
+    image: triphalaImg, // TEMP — placeholder only, for transition testing
+    isPlaceholder: true,
+  },
+];
+
 // src/data/products.js — only this block changes, everything else in the file stays as-is
 export const productBenefits = [
   { key: 'energy', title: 'Natural Energy Boost', body: 'Shilajit helps improve energy levels and reduces fatigue naturally.' },

@@ -1,78 +1,83 @@
 // src/components/abix/RitualOffers.jsx
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ritualBundles } from '@/data/products';
+import { ABIX } from './brandColors';
 
-// Warm mineral-stone surface — continues the charcoal/mineral/resin system.
-// CTA now goes straight to the existing Support inquiry form — no modal,
-// no separate name/phone screen.
+// Editorial interactive list — NOT a 4-card grid. Full-width stacked
+// rows, large type, hover reveals a one-line description. This is the
+// "typography, spacing, subtle movement" version the brief asked for.
+const moments = [
+  { key: 'focus', title: 'Focus', line: 'For the hours that need clarity.' },
+  { key: 'move', title: 'Move', line: 'For strength, stamina, and motion.' },
+  { key: 'rest', title: 'Rest', line: 'For slowing down, deliberately.' },
+  { key: 'reset', title: 'Reset', line: 'For beginning again, gently.' },
+];
+
 export default function RitualOffers() {
+  const [hovered, setHovered] = useState(null);
+
   return (
-    <section id="offers" className="bg-[#322E2C] py-24 lg:py-36">
-      <div className="mx-auto max-w-7xl px-6 lg:px-10">
-        <div className="text-center max-w-2xl mx-auto mb-14 lg:mb-20">
-          <span className="font-grotesk text-[11px] font-medium uppercase tracking-luxe-sm text-gold-light">Start your ritual</span>
-          <h2 className="mt-5 font-display text-4xl sm:text-5xl lg:text-6xl text-ivory leading-[1.02] tracking-tight">
-            Choose your rhythm.
+    <section id="offers" className="relative py-24 lg:py-36" style={{ background: ABIX.deep }}>
+      <div className="relative mx-auto max-w-5xl px-6 lg:px-10">
+        <div className="mb-12 lg:mb-16">
+          <span className="font-grotesk text-[11px] font-medium uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>
+            Choose Your Rhythm
+          </span>
+          <h2 className="mt-4 font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.05] tracking-tight" style={{ color: ABIX.ivory }}>
+            ABIXMART fits the moment.
           </h2>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-5 lg:gap-8 items-stretch">
-          {ritualBundles.map((b, i) => (
-            <motion.div
-              key={b.name}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-60px' }}
-              transition={{ duration: 0.7, delay: i * 0.1 }}
-              className={`relative flex flex-col p-8 lg:p-10 transition-colors duration-500 ${
-                b.highlight ? 'bg-resin text-ivory' : 'bg-[#151417]/50 text-ivory'
-              }`}
-            >
-              {b.highlight && (
-                <span className="absolute top-6 right-6 font-grotesk text-[9px] uppercase tracking-luxe-sm text-ivory/80">
-                  Most chosen
-                </span>
-              )}
-              <span className={`font-grotesk text-6xl font-medium leading-none ${b.highlight ? 'text-ivory/25' : 'text-ivory/15'}`}>
-                0{i + 1}
-              </span>
-              <h3 className="mt-6 font-display text-3xl">{b.name}</h3>
-              <p className={`mt-2 text-sm ${b.highlight ? 'text-ivory/75' : 'text-ivory/55'}`}>{b.detail}</p>
-
-              {/* Price block: struck-through original, prominent current
-                  price, saving shown but secondary. */}
-              <div className="mt-8">
-                <span className={`block text-sm line-through ${b.highlight ? 'text-ivory/50' : 'text-ivory/40'}`}>
-                  ₹{b.originalPrice.toLocaleString('en-IN')}
-                </span>
-                <div className="mt-1 flex items-baseline gap-3 flex-wrap">
-                  <span className="font-price text-4xl">₹{b.price.toLocaleString('en-IN')}</span>
-                  <span className={`text-xs font-medium ${b.highlight ? 'text-ivory/80' : 'text-gold-light'}`}>
-                    Save ₹{b.saving.toLocaleString('en-IN')}
-                  </span>
-                </div>
-              </div>
-
-              <Link
-                to={`/support?product=shilajit&quantity=${b.quantity}&ritual=${b.id}#inquiry`}
-                className={`group mt-8 h-14 inline-flex items-center justify-center text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300 ${
-                  b.highlight
-                    ? 'bg-ivory text-[#151417] hover:bg-[#151417] hover:text-ivory'
-                    : 'bg-ivory text-[#151417] hover:bg-resin hover:text-ivory'
-                }`}
+        <div style={{ borderTop: `1px solid ${ABIX.ivory12}` }}>
+          {moments.map((m, i) => {
+            const isHovered = hovered === m.key;
+            return (
+              <motion.div
+                key={m.key}
+                onMouseEnter={() => setHovered(m.key)}
+                onMouseLeave={() => setHovered(null)}
+                initial={{ opacity: 0, y: 14 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-60px' }}
+                transition={{ duration: 0.5, delay: i * 0.06 }}
+                className="group flex items-baseline justify-between py-7 lg:py-9 cursor-default transition-colors duration-500"
+                style={{ borderBottom: `1px solid ${ABIX.ivory12}` }}
               >
-                Start this ritual
-                <span className="ml-3 transition-transform duration-300 group-hover:translate-x-1">→</span>
-              </Link>
-            </motion.div>
-          ))}
+                <div className="flex items-baseline gap-6 lg:gap-10">
+                  <span className="font-grotesk text-[11px] tracking-luxe-sm" style={{ color: ABIX.ivory45 }}>
+                    0{i + 1}
+                  </span>
+                  <h3
+                    className="font-display text-3xl sm:text-4xl lg:text-5xl transition-all duration-500"
+                    style={{ color: isHovered ? ABIX.gold : ABIX.ivory }}
+                  >
+                    {m.title}
+                  </h3>
+                </div>
+                <motion.p
+                  animate={{ opacity: isHovered ? 1 : 0, x: isHovered ? 0 : 12 }}
+                  transition={{ duration: 0.35 }}
+                  className="hidden sm:block text-sm max-w-[240px] text-right"
+                  style={{ color: ABIX.ivory70 }}
+                >
+                  {m.line}
+                </motion.p>
+              </motion.div>
+            );
+          })}
         </div>
 
-        <p className="mt-10 text-center text-xs text-ivory/50 max-w-lg mx-auto">
-          Promotional pricing shown is representative. No fabricated urgency — choose what fits your practice.
-        </p>
+        <div className="mt-12 flex justify-center">
+          <Link
+            to="/shop"
+            className="group inline-flex items-center gap-3 text-[11px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300"
+            style={{ color: ABIX.ivory }}
+          >
+            Find your rhythm in the shop
+            <span className="transition-transform duration-300 group-hover:translate-x-1">→</span>
+          </Link>
+        </div>
       </div>
     </section>
   );
