@@ -1,0 +1,212 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 38% 95%;      /* #F7F3EA warm ivory */
+    --foreground: 120 6% 12%;      /* #1D211D primary text */
+    --card: 0 0% 100%;
+    --card-foreground: 120 6% 12%;
+    --popover: 40 38% 95%;
+    --popover-foreground: 120 6% 12%;
+    --primary: 150 30% 13%;        /* #142621 muted charcoal-forest, not spa-green */
+    --primary-foreground: 40 30% 95%;
+    --secondary: 36 18% 89%;       /* warm mineral sand */
+    --secondary-foreground: 150 30% 13%;
+    --muted: 36 18% 89%;
+    --muted-foreground: 25 8% 35%;
+    --accent: 100 7% 45%;          /* muted moss — restrained, not dominant */
+    --accent-foreground: 40 30% 95%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 40 30% 95%;
+    --border: 36 14% 85%;
+    --input: 36 14% 85%;
+    --ring: 27 57% 35%;              /* resin amber */
+    /* --gold now points to the resin-amber accent — every existing
+       text-gold/bg-gold usage across the project inherits the new
+       product-specific accent automatically, no per-component rename. */
+    --gold: 27 57% 35%;              /* #8B5326 resin amber — the color of the actual resin, not jewelry gold */
+    --gold-light: 30 53% 55%;        /* lighter resin tint, for accents on dark surfaces */
+    --moss: 100 7% 45%;
+    --sand: 36 18% 89%;
+    --ivory: 40 30% 96%;             /* slightly cooler/quieter warm ivory */
+    --green-deep: 150 30% 13%;       /* muted charcoal-forest — restrained anchor, not a section-fill color */
+    --stone: 32 14% 60%;             /* mineral Himalayan stone neutral */
+    --stone-dark: 30 12% 40%;
+    --charcoal: 20 14% 8%;           /* near-black warm charcoal — primary dominant surface */
+    --espresso: 24 37% 13%;          /* deep warm brown — secondary dominant surface */
+    --clay: 30 29% 27%;              /* warm mid clay/taupe — tertiary surface, the "warm earth" peak */
+    --resin: 27 57% 35%;             /* explicit alias of --gold, for new components */
+    --resin-light: 30 53% 55%;
+    --chart-1: 150 30% 13%;
+    --chart-2: 100 7% 45%;
+    --chart-3: 27 57% 35%;
+    --chart-4: 36 18% 89%;
+    --chart-5: 25 8% 35%;
+    --radius: 0.25rem;
+    --font-heading: 'Cormorant Garamond', ui-serif, Georgia, serif;
+    --font-display: 'Cormorant Garamond', ui-serif, Georgia, serif;
+    --font-grotesk: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+    --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --sidebar-background: 40 38% 95%;
+    --sidebar-foreground: 120 6% 12%;
+    --sidebar-primary: 145 54% 15%;
+    --sidebar-primary-foreground: 40 38% 95%;
+    --sidebar-accent: 40 25% 89%;
+    --sidebar-accent-foreground: 145 54% 15%;
+    --sidebar-border: 40 20% 86%;
+    --sidebar-ring: 38 36% 52%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body;
+    font-feature-settings: "ss01", "cv01";
+    line-height: 1.6;
+  }
+
+  ::selection {
+    background-color: hsl(var(--green-deep));
+    color: hsl(var(--ivory));
+  }
+}
+
+@layer utilities {
+  .font-display { font-family: var(--font-display); }
+  .font-heading { font-family: var(--font-heading); }
+  .font-grotesk { font-family: var(--font-grotesk); }
+
+  /* Hides the scrollbar on horizontally-scrollable strips (e.g. the
+     Account page's mobile nav tabs) while keeping them scrollable. */
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+
+  /* Modern e-commerce numeral style for prices, quantities and other
+     prominent UI numbers — deliberately sans-serif (not the editorial
+     Cormorant Garamond used for headings) so digits and the ₹ symbol
+     sit cleanly together. Moderately bold, not decorative. */
+  .font-price {
+    font-family: var(--font-body);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1, "cv01" 0, "ss01" 0;
+  }
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+
+  .tracking-luxe { letter-spacing: 0.35em; }
+  .tracking-luxe-sm { letter-spacing: 0.22em; }
+
+  .grain {
+    position: relative;
+  }
+  .grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .marquee-track {
+    animation: marquee 38s linear infinite;
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  .express-input {
+    @apply w-full bg-transparent border-b border-charcoal/25 py-3 text-charcoal placeholder:text-foreground/35 focus:outline-none focus:border-resin transition-colors text-base;
+  }
+
+  /* Same role as .express-input, for the translucent dark auth panels
+     (Login/Create Account/Forgot Password/AuthAction) sitting over the
+     cinematic mineral/resin photography — ivory text on a light-ivory
+     underline so it reads against a dark glass surface instead of a
+     white card. */
+  .express-input-inverse {
+    @apply w-full bg-transparent border-b border-ivory/25 py-3 text-ivory placeholder:text-ivory/35 focus:outline-none focus:border-gold-light transition-colors text-base;
+  }
+
+  .scroll-hint {
+    animation: scrollHint 2.2s ease-in-out infinite;
+  }
+  @keyframes scrollHint {
+    0%, 100% { transform: translateY(0); opacity: 0.4; }
+    50% { transform: translateY(8px); opacity: 1; }
+  }
+}
+
+@layer components {
+  /* ---------------------------------------------------------------
+     GLOBAL ABIXMART DESIGN SYSTEM
+     Reusable rules built entirely on existing tokens (charcoal, resin,
+     espresso, clay, sand, ivory, gold-light) — no new one-off colors.
+     Not used by any Home-page component (those use inline utilities
+     directly); this layer exists for Shop/About/Support/ProductDetail/
+     Cart/Checkout/Account/auth pages.
+     --------------------------------------------------------------- */
+
+  /* Micro-labels: eyebrows, tab labels, step counters, field labels —
+     anywhere a small uppercase caption appears outside the <Eyebrow>
+     component itself. */
+  .label-meta {
+    @apply font-grotesk text-[10px] uppercase tracking-luxe-sm;
+  }
+
+  /* Buttons — shared geometry/type; color comes from a second class. */
+  .btn {
+    @apply inline-flex items-center justify-center h-14 px-8 text-[12px] font-semibold tracking-luxe-sm uppercase rounded-none transition-colors duration-300 disabled:opacity-40 disabled:pointer-events-none;
+  }
+  /* Solid dark — the default primary action on light/sand/ivory surfaces. */
+  .btn-primary {
+    @apply btn bg-charcoal text-ivory hover:bg-resin hover:text-ivory;
+  }
+  /* Solid light — the primary action on dark surfaces (espresso/clay/charcoal),
+     visually equivalent role to .btn-primary, just inverted for contrast. */
+  .btn-primary-inverse {
+    @apply btn bg-ivory text-charcoal hover:bg-resin hover:text-ivory;
+  }
+  /* Outlined — secondary action, works on light surfaces. */
+  .btn-outline {
+    @apply btn border border-charcoal text-charcoal bg-transparent hover:bg-charcoal hover:text-ivory;
+  }
+  /* Outlined — secondary action, works on dark surfaces. */
+  .btn-outline-inverse {
+    @apply btn border border-ivory text-ivory bg-transparent hover:bg-ivory hover:text-charcoal;
+  }
+  /* Accent — resin-amber, reserved for a single emphasis action per view
+     (e.g. "Buy now" next to a plain "Add to cart"). Not for routine use. */
+  .btn-accent {
+    @apply btn bg-resin text-ivory hover:bg-gold-light hover:text-charcoal;
+  }
+
+  /* Cards — light-surface product/content tiles. */
+  .card-surface {
+    @apply bg-ivory border border-charcoal/10;
+  }
+
+  /* Badges — small status/category tags. */
+  .badge {
+    @apply label-meta inline-flex items-center px-2.5 py-1 bg-charcoal/8 text-charcoal;
+  }
+  .badge-inverse {
+    @apply label-meta inline-flex items-center px-2.5 py-1 bg-ivory/15 text-ivory;
+  }
+}
