@@ -90,14 +90,15 @@ export default function Header() {
     <>
       <header className={`fixed top-0 inset-x-0 z-40 transition-all duration-500 ${headerBgClass}`}>
         <nav className="mx-auto max-w-7xl px-6 lg:px-10 h-16 lg:h-20 flex items-center justify-between">
-          <Link to="/" className="flex items-center" aria-label="ABIXMART home">
-            <img
-              src={logo}
-              alt="ABIXMART"
-              className="h-11 lg:h-[52px] w-auto object-contain"
-            />
-          </Link>
-
+       <Link to="/" className="flex items-center" aria-label="ABIXMART home">
+  <img
+    src={logo}
+    alt="ABIXMART"
+    className={`h-11 lg:h-[52px] w-auto object-contain transition-opacity duration-500 ${
+      transparent ? 'opacity-0 pointer-events-none' : 'opacity-100'
+    }`}
+  />
+</Link>
           <div className="hidden md:flex items-center gap-9">
             {navLinks.map((l) => {
               const active = location.pathname === l.to;
