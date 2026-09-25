@@ -1,31 +1,34 @@
 // src/components/abix/brandColors.js
 //
-// SINGLE SOURCE OF TRUTH for the ABIXMART homepage palette. Every
-// Home-page section imports ABIX from here instead of defining its own
-// hex values. This is what keeps the whole homepage as ONE visual
-// world — no section can drift into a different near-black/gray/green
-// mix than another, because they're all reading the same constants.
-//
-// Do not add new colors here casually — the brand rule is ONE fixed
-// identity, not a palette to pick and choose from per section.
-
+// ABIXMART — Earth + Botanical palette (final color direction).
+// One centralized token set. Every homepage section reads its colors
+// from here — no section should hardcode its own green/brown values.
 export const ABIX = {
-  // Primary background — used for EVERY homepage section background.
-  // A real, visible deep forest green — not a near-black gray.
-  deep: '#142A1F',
+  // Deepest background — Obsidian Forest
+  obsidian: '#101814',
+  // Primary green — Deep Botanical
+  deep: '#17231D',
+  // Secondary green — Black Olive
+  blackOlive: '#20281F',
+  // Muted olive — Dark Moss
+  darkMoss: '#293025',
+  // Earth — Espresso Earth
+  espresso: '#30251E',
+  // Deep brown — Deep Walnut
+  walnut: '#3A2C22',
+  // Light natural surface — Warm Stone (restrained use only)
+  stone: '#8A7965',
 
-  // Same hue family, marginally deeper — for gradients/vignettes WITHIN
-  // a section only (never as a competing section background).
-  deeper: '#0F2018',
+  // Primary light text — Warm Ivory
+  ivory: '#E9E1D2',
+  ivory70: 'rgba(233,225,210,0.7)',
+  ivory45: 'rgba(233,225,210,0.45)',
+  ivory25: 'rgba(233,225,210,0.25)',
+  ivory12: 'rgba(233,225,210,0.12)',
 
-  ivory: '#F3ECE0',
-  ivory70: 'rgba(243,236,224,0.7)',
-  ivory45: 'rgba(243,236,224,0.45)',
-  ivory25: 'rgba(243,236,224,0.25)',
-  ivory12: 'rgba(243,236,224,0.12)',
-
-  gold: '#B08D57',
-  goldLight: '#CBA876',
-  gold25: 'rgba(176,141,87,0.25)',
-  gold15: 'rgba(176,141,87,0.15)',
+  // Accent — Muted Antique Gold (restrained use only)
+  gold: '#B49A62',
+  goldLight: '#C7AE7D',
+  gold25: 'rgba(180,154,98,0.25)',
+  gold15: 'rgba(180,154,98,0.15)',
 };

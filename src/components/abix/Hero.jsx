@@ -119,14 +119,14 @@ export default function Hero() {
         backgroundRepeat: 'no-repeat',
       }}
     >
-      {/* Minimal scrim, tinted from the existing ABIX.deep brand color
-          (not a new color) — just enough for text legibility, never
-          heavy enough to hide the artwork */}
+            {/* Minimal scrim, built from the ABIX palette (deep → black olive
+          → obsidian) instead of a one-off rgba green — just enough for
+          text legibility, never heavy enough to hide the artwork */}
       <div
         className="absolute inset-0 z-[1] pointer-events-none"
         style={{
           background:
-            'linear-gradient(180deg, rgba(20,42,31,0.10) 0%, rgba(20,42,31,0.28) 45%, rgba(20,42,31,0.52) 100%)',
+            'linear-gradient(180deg, rgba(23,35,29,0.12) 0%, rgba(32,40,31,0.32) 45%, rgba(16,24,20,0.60) 100%)',
         }}
       />
 
