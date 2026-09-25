@@ -1,7 +1,7 @@
 // src/pages/Home.jsx
 import React from 'react';
 import Hero from '@/components/abix/Hero';
-import BrandPhilosophy from '@/components/abix/BrandPhilosophy';
+import NatureFilm from '@/components/abix/NatureFilm';
 import RitualOffers from '@/components/abix/RitualOffers';
 import DiscoverAbixmart from '@/components/abix/DiscoverAbixmart';
 import WhatsGrowingNext from '@/components/abix/WhatsGrowingNext';
@@ -12,7 +12,7 @@ export default function Home() {
   return (
     <PageTransition>
       <Hero />
-      <BrandPhilosophy />
+      <NatureFilm />
       <RitualOffers />
       <DiscoverAbixmart />
       <WhatsGrowingNext />
