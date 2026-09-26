@@ -9,16 +9,6 @@ import leafImg from '@/assets/hero/leaf.png';
 import { useHeroIntro } from '@/hooks/useHeroIntro';
 import { ABIX } from './brandColors';
 
-// ABIXMART Hero — v5.
-// Background is now the supplied brand artwork (abixmart-hero-bg.jpg)
-// instead of a CSS gradient — this file will fail to build until that
-// file exists at src/assets/hero/abixmart-hero-bg.jpg. Branches sit
-// closer to center (bigger + pulled inward) and are masked to feather
-// into the artwork rather than reading as rectangles. Leaves spawn
-// from anchor points along each branch, not from the top of the
-// screen. No logo, no product showcase — both live in Header.jsx and
-// a future section respectively.
-
 export default function Hero() {
   const containerRef = useRef(null);
   const leftBranchRef = useRef(null);
@@ -34,18 +24,10 @@ export default function Hero() {
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-
     setReduceMotion(mq.matches);
-
-    const handleChange = (e) => {
-      setReduceMotion(e.matches);
-    };
-
+    const handleChange = (e) => setReduceMotion(e.matches);
     mq.addEventListener('change', handleChange);
-
-    return () => {
-      mq.removeEventListener('change', handleChange);
-    };
+    return () => mq.removeEventListener('change', handleChange);
   }, []);
 
   useHeroIntro({
@@ -60,8 +42,6 @@ export default function Hero() {
     scrollHint: scrollHintRef,
   });
 
-  // Leaf spawn points clustered along each branch instead of a random
-  // top-of-viewport band. x/y are % of the viewport.
   const LEFT_ANCHORS = [
     { x: 6, y: 4 },
     { x: 13, y: 9 },
@@ -78,7 +58,8 @@ export default function Hero() {
     x: 100 - a.x,
     y: a.y,
   }));
-    const leaves = useMemo(() => {
+
+  const leaves = useMemo(() => {
     if (typeof window === 'undefined') return [];
 
     const vw = window.innerWidth;
@@ -108,106 +89,75 @@ export default function Hero() {
   }, []);
 
   return (
-    <section
+            <section
       ref={containerRef}
       id="top"
       className="relative min-h-[100svh] w-full overflow-hidden flex flex-col grain"
-      style={{
-        backgroundImage: `url(${heroBgImg})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center center',
-        backgroundRepeat: 'no-repeat',
-      }}
+      style={{ background: `linear-gradient(180deg, ${ABIX.deep} 0%, ${ABIX.deep} 68%, ${ABIX.obsidian} 100%)` }}
     >
-            {/* Minimal scrim, built from the ABIX palette (deep → black olive
-          → obsidian) instead of a one-off rgba green — just enough for
-          text legibility, never heavy enough to hide the artwork */}
+      {/* CHANGED: background image now lives in its own layer with a
+          bottom mask, instead of directly on the section. This lets it
+          feather into transparency over its final ~22% of height,
+          revealing the shared atmosphere gradient (Home.jsx) behind it
+          — so Hero -> Video has no hard horizontal boundary. */}
+      <div
+        className="absolute inset-0 z-0"
+        aria-hidden="true"
+        style={{
+          backgroundImage: `url(${heroBgImg})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center center',
+          backgroundRepeat: 'no-repeat',
+          maskImage: 'linear-gradient(to bottom, black 0%, black 78%, transparent 100%)',
+          WebkitMaskImage: 'linear-gradient(to bottom, black 0%, black 78%, transparent 100%)',
+        }}
+      />
+
+      {/* CHANGED: scrim rebuilt from the real palette (deep botanical
+          -> obsidian) instead of an unrelated green rgba. */}
       <div
         className="absolute inset-0 z-[1] pointer-events-none"
         style={{
           background:
-            'linear-gradient(180deg, rgba(23,35,29,0.12) 0%, rgba(32,40,31,0.32) 45%, rgba(16,24,20,0.60) 100%)',
+            'linear-gradient(180deg, rgba(29,43,28,0.12) 0%, rgba(29,43,28,0.32) 45%, rgba(9,17,11,0.58) 100%)',
         }}
       />
 
       <style>{`
         @keyframes abixLeafFall {
-          0% {
-            transform: translate3d(0, 0, 0) rotate(var(--rot-start));
-            opacity: 0;
-          }
-
-          10% {
-            opacity: var(--leaf-opacity);
-          }
-
-          92% {
-            opacity: var(--leaf-opacity);
-          }
-
-          100% {
-            transform:
-              translate3d(calc(var(--drift) * -1), 100vh, 0)
-              rotate(var(--rot-end));
-            opacity: 0;
-          }
+          0% { transform: translate3d(0, 0, 0) rotate(var(--rot-start)); opacity: 0; }
+          10% { opacity: var(--leaf-opacity); }
+          92% { opacity: var(--leaf-opacity); }
+          100% { transform: translate3d(calc(var(--drift) * -1), 100vh, 0) rotate(var(--rot-end)); opacity: 0; }
         }
 
         @keyframes abixLeafFallShort {
-          0% {
-            transform: translate3d(0, 0, 0) rotate(var(--rot-start));
-            opacity: 0;
-          }
-
-          12% {
-            opacity: var(--leaf-opacity);
-          }
-
-          70% {
-            opacity: var(--leaf-opacity);
-          }
-
-          100% {
-            transform:
-              translate3d(var(--drift), 48vh, 0)
-              rotate(var(--rot-end));
-            opacity: 0;
-          }
+          0% { transform: translate3d(0, 0, 0) rotate(var(--rot-start)); opacity: 0; }
+          12% { opacity: var(--leaf-opacity); }
+          70% { opacity: var(--leaf-opacity); }
+          100% { transform: translate3d(var(--drift), 48vh, 0) rotate(var(--rot-end)); opacity: 0; }
         }
 
         .abix-leaf {
-  position: absolute;
-  will-change: transform, opacity;
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-  filter: brightness(1.35) contrast(1.15) saturate(1.1) drop-shadow(0 4px 10px rgba(0,0,0,0.5));
-}
-
-        .abix-leaf-long {
-          animation-name: abixLeafFall;
+          position: absolute;
+          will-change: transform, opacity;
+          animation-timing-function: ease-in-out;
+          animation-iteration-count: infinite;
+          filter: brightness(1.35) contrast(1.15) saturate(1.1) drop-shadow(0 4px 10px rgba(0,0,0,0.5));
         }
 
-        .abix-leaf-short {
-          animation-name: abixLeafFallShort;
-        }
+        .abix-leaf-long { animation-name: abixLeafFall; }
+        .abix-leaf-short { animation-name: abixLeafFallShort; }
       `}</style>
 
-      {/* Falling leaves — anchored to the branches */}
       {!reduceMotion && (
-        <div
-          className="absolute inset-0 z-[2] pointer-events-none overflow-hidden"
-          aria-hidden="true"
-        >
+        <div className="absolute inset-0 z-[2] pointer-events-none overflow-hidden" aria-hidden="true">
           {leaves.map((leaf) => (
             <img
               key={leaf.id}
               src={leafImg}
               alt=""
-              className={`abix-leaf ${
-                leaf.short
-                  ? 'abix-leaf-short'
-                  : 'abix-leaf-long'
-              }`}
+              className={`abix-leaf ${leaf.short ? 'abix-leaf-short' : 'abix-leaf-long'}`}
               style={{
                 left: `${leaf.left}%`,
                 top: `${leaf.top}%`,
@@ -225,39 +175,20 @@ export default function Hero() {
         </div>
       )}
 
-      {/* Branches — bigger + pulled inward so they read as one
-          composition framing the center, masked so they feather
-          rather than end in a hard rectangle */}
       <img
         ref={leftBranchRef}
         src={leftBranchImg}
         alt=""
         aria-hidden="true"
         className="
-          absolute
-          z-[3]
-          pointer-events-none
-          select-none
-          -top-2
-          -left-2
-          w-[58vw]
-          max-w-[240px]
-
-          sm:-top-3
-          sm:left-[-4vw]
-          sm:w-[54vw]
-          sm:max-w-[400px]
-
-          lg:-top-4
-          lg:left-[-2vw]
-          lg:w-[46vw]
-          lg:max-w-[720px]
+          absolute z-[3] pointer-events-none select-none
+          -top-2 -left-2 w-[58vw] max-w-[240px]
+          sm:-top-3 sm:left-[-4vw] sm:w-[54vw] sm:max-w-[400px]
+          lg:-top-4 lg:left-[-2vw] lg:w-[46vw] lg:max-w-[720px]
         "
         style={{
-          maskImage:
-            'linear-gradient(120deg, black 50%, transparent 88%)',
-          WebkitMaskImage:
-            'linear-gradient(120deg, black 50%, transparent 88%)',
+          maskImage: 'linear-gradient(120deg, black 50%, transparent 88%)',
+          WebkitMaskImage: 'linear-gradient(120deg, black 50%, transparent 88%)',
         }}
       />
 
@@ -267,83 +198,28 @@ export default function Hero() {
         alt=""
         aria-hidden="true"
         className="
-          absolute
-          z-[3]
-          pointer-events-none
-          select-none
-          -top-2
-          -right-2
-          w-[58vw]
-          max-w-[240px]
-
-          sm:-top-3
-          sm:right-[-4vw]
-          sm:w-[54vw]
-          sm:max-w-[400px]
-
-          lg:-top-4
-          lg:right-[-2vw]
-          lg:w-[46vw]
-          lg:max-w-[720px]
+          absolute z-[3] pointer-events-none select-none
+          -top-2 -right-2 w-[58vw] max-w-[240px]
+          sm:-top-3 sm:right-[-4vw] sm:w-[54vw] sm:max-w-[400px]
+          lg:-top-4 lg:right-[-2vw] lg:w-[46vw] lg:max-w-[720px]
         "
         style={{
-          maskImage:
-            'linear-gradient(240deg, black 50%, transparent 88%)',
-          WebkitMaskImage:
-            'linear-gradient(240deg, black 50%, transparent 88%)',
+          maskImage: 'linear-gradient(240deg, black 50%, transparent 88%)',
+          WebkitMaskImage: 'linear-gradient(240deg, black 50%, transparent 88%)',
         }}
       />
 
-      {/* CENTER COMPOSITION — no logo, no product */}
-      <div
-        className="
-          relative
-          z-10
-          mx-auto
-          w-full
-          max-w-2xl
-          px-6
-          flex-1
-          flex
-          flex-col
-          items-center
-          justify-center
-          text-center
-          pt-16
-          pb-20
-
-          lg:pt-20
-          lg:pb-24
-        "
-      >
-        <h1
-          className="font-display leading-[0.98] tracking-tight"
-          style={{ color: ABIX.ivory }}
-        >
+      <div className="relative z-10 mx-auto w-full max-w-2xl px-6 flex-1 flex flex-col items-center justify-center text-center pt-16 pb-20 lg:pt-20 lg:pb-24">
+        <h1 className="font-display leading-[0.98] tracking-tight" style={{ color: ABIX.ivory }}>
           <span className="block overflow-hidden">
-            <span
-              ref={headlineLine1Ref}
-              className="
-                block
-                text-[clamp(2rem,8.5vw,2.9rem)]
-                lg:text-[5vw]
-                xl:text-[56px]
-              "
-            >
+            <span ref={headlineLine1Ref} className="block text-[clamp(2rem,8.5vw,2.9rem)] lg:text-[5vw] xl:text-[56px]">
               Rooted in nature.
             </span>
           </span>
-
           <span className="block overflow-hidden">
             <span
               ref={headlineLine2Ref}
-              className="
-                block
-                text-[clamp(2rem,8.5vw,2.9rem)]
-                lg:text-[5vw]
-                xl:text-[56px]
-                italic
-              "
+              className="block text-[clamp(2rem,8.5vw,2.9rem)] lg:text-[5vw] xl:text-[56px] italic"
               style={{ color: ABIX.ivory70 }}
             >
               Designed for modern life.
@@ -353,97 +229,30 @@ export default function Hero() {
 
         <p
           ref={descriptionRef}
-          className="
-            mt-4
-            lg:mt-6
-            max-w-md
-            mx-auto
-            text-sm
-            sm:text-base
-            lg:text-lg
-            leading-relaxed
-            font-body
-          "
+          className="mt-4 lg:mt-6 max-w-md mx-auto text-sm sm:text-base lg:text-lg leading-relaxed font-body"
           style={{ color: ABIX.ivory70 }}
         >
-          A considered collection of wellness essentials, created to become
-          part of your everyday rhythm.
+          A considered collection of wellness essentials, created to become part of your everyday rhythm.
         </p>
 
-        <div
-          className="
-            mt-7
-            lg:mt-9
-            flex
-            flex-col
-            sm:flex-row
-            gap-3
-            lg:gap-4
-          "
-        >
+        <div className="mt-7 lg:mt-9 flex flex-col sm:flex-row gap-3 lg:gap-4">
           <Link
             ref={primaryCtaRef}
             to="/shop"
-            className="
-              group
-              inline-flex
-              items-center
-              justify-center
-              h-12
-              lg:h-13
-              px-7
-              lg:px-8
-              text-[11px]
-              font-semibold
-              tracking-luxe-sm
-              uppercase
-              rounded-none
-              transition-colors
-              duration-300
-            "
-            style={{
-              backgroundColor: ABIX.ivory,
-              color: ABIX.deep,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = ABIX.gold;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = ABIX.ivory;
-            }}
+            className="group inline-flex items-center justify-center h-12 lg:h-13 px-7 lg:px-8 text-[11px] font-semibold tracking-luxe-sm uppercase rounded-none transition-colors duration-300"
+            style={{ backgroundColor: ABIX.ivory, color: ABIX.deep }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = ABIX.gold; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = ABIX.ivory; }}
           >
             Explore Collection
-
-            <span className="ml-3 transition-transform duration-300 group-hover:translate-x-1">
-              →
-            </span>
+            <span className="ml-3 transition-transform duration-300 group-hover:translate-x-1">→</span>
           </Link>
 
           <a
             ref={secondaryCtaRef}
             href="#philosophy"
-            className="
-              inline-flex
-              items-center
-              justify-center
-              h-12
-              lg:h-13
-              px-7
-              lg:px-8
-              border
-              text-[11px]
-              font-semibold
-              tracking-luxe-sm
-              uppercase
-              rounded-none
-              transition-colors
-              duration-300
-              hover:bg-white/10
-            "
-            style={{
-              borderColor: ABIX.ivory25,
-              color: ABIX.ivory,
-            }}
+            className="inline-flex items-center justify-center h-12 lg:h-13 px-7 lg:px-8 border text-[11px] font-semibold tracking-luxe-sm uppercase rounded-none transition-colors duration-300 hover:bg-white/10"
+            style={{ borderColor: ABIX.ivory25, color: ABIX.ivory }}
           >
             Discover the Brand
           </a>
@@ -452,28 +261,11 @@ export default function Hero() {
 
       <div
         ref={scrollHintRef}
-        className="
-          hidden
-          lg:flex
-          absolute
-          bottom-7
-          left-1/2
-          -translate-x-1/2
-          z-10
-          flex-col
-          items-center
-          gap-2
-        "
+        className="hidden lg:flex absolute bottom-7 left-1/2 -translate-x-1/2 z-10 flex-col items-center gap-2"
         style={{ color: ABIX.ivory70 }}
       >
-        <span className="text-[10px] uppercase tracking-luxe-sm">
-          Scroll
-        </span>
-
-        <ArrowDown
-          size={14}
-          className="scroll-hint"
-        />
+        <span className="text-[10px] uppercase tracking-luxe-sm">Scroll</span>
+        <ArrowDown size={14} className="scroll-hint" />
       </div>
     </section>
   );

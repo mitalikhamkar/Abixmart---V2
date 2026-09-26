@@ -1,34 +1,24 @@
 // src/components/abix/brandColors.js
-//
-// ABIXMART — Earth + Botanical palette (final color direction).
-// One centralized token set. Every homepage section reads its colors
-// from here — no section should hardcode its own green/brown values.
 export const ABIX = {
-  // Deepest background — Obsidian Forest
-  obsidian: '#101814',
-  // Primary green — Deep Botanical
-  deep: '#17231D',
-  // Secondary green — Black Olive
-  blackOlive: '#20281F',
-  // Muted olive — Dark Moss
-  darkMoss: '#293025',
-  // Earth — Espresso Earth
-  espresso: '#30251E',
-  // Deep brown — Deep Walnut
-  walnut: '#3A2C22',
-  // Light natural surface — Warm Stone (restrained use only)
-  stone: '#8A7965',
+  // Neutral — near-black forest. Now the dominant seam color at every
+  // section boundary, so nothing has to "blend" across a gradient —
+  // everything meets on this exact same flat value.
+  obsidian: '#070C08',
+  // Primary — darker deep botanical green than before, per direct
+  // feedback that the previous shade read as too light/olive.
+  deep: '#121C12',
+  // Tertiary — darker, less warm/muddy earth tone. Used sparingly now,
+  // as accents within a section rather than as a section-wide wash.
+  espresso: '#1C140F',
 
-  // Primary light text — Warm Ivory
-  ivory: '#E9E1D2',
-  ivory70: 'rgba(233,225,210,0.7)',
-  ivory45: 'rgba(233,225,210,0.45)',
-  ivory25: 'rgba(233,225,210,0.25)',
-  ivory12: 'rgba(233,225,210,0.12)',
+  gold: '#C5A880',
+  goldLight: '#D4BFA0',
+  gold25: 'rgba(197,168,128,0.25)',
+  gold15: 'rgba(197,168,128,0.15)',
 
-  // Accent — Muted Antique Gold (restrained use only)
-  gold: '#B49A62',
-  goldLight: '#C7AE7D',
-  gold25: 'rgba(180,154,98,0.25)',
-  gold15: 'rgba(180,154,98,0.15)',
+  ivory: '#EAE2D3',
+  ivory70: 'rgba(234,226,211,0.7)',
+  ivory45: 'rgba(234,226,211,0.45)',
+  ivory25: 'rgba(234,226,211,0.25)',
+  ivory12: 'rgba(234,226,211,0.12)',
 };

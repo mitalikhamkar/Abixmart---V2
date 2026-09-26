@@ -26,12 +26,12 @@ export default function Footer() {
           the footer image stays visible near the top, then the page
           resolves into the darkest tone on the site by the bottom
           edge, replacing the removed ABIX.stoneDeep token. */}
-      <div className="absolute inset-0">
+            <div className="absolute inset-0">
         <img src={footerImg} alt="" className="w-full h-full object-cover" aria-hidden="true" />
         <div
           className="absolute inset-0"
           style={{
-            background: `linear-gradient(180deg, rgba(16,24,20,0.25) 0%, ${ABIX.deep}e6 50%, ${ABIX.obsidian}f7 100%)`,
+            background: `linear-gradient(180deg, rgba(9,17,11,0.25) 0%, ${ABIX.deep}e6 50%, ${ABIX.obsidian}f7 100%)`,
           }}
         />
       </div>
