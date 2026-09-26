@@ -1,24 +1,30 @@
 // src/components/abix/brandColors.js
+//
+// ABIXMART — final global palette: near-black + very subtle botanical
+// green, one continuous material rather than distinct colored sections.
 export const ABIX = {
-  // Neutral — near-black forest. Now the dominant seam color at every
-  // section boundary, so nothing has to "blend" across a gradient —
-  // everything meets on this exact same flat value.
-  obsidian: '#070C08',
-  // Primary — darker deep botanical green than before, per direct
-  // feedback that the previous shade read as too light/olive.
-  deep: '#121C12',
-  // Tertiary — darker, less warm/muddy earth tone. Used sparingly now,
-  // as accents within a section rather than as a section-wide wash.
-  espresso: '#1C140F',
+  // Dominant background — near-black with the faintest green cast
+  obsidian: '#0B120C',
+  // Extremely subtle depth steps off the dominant background — for
+  // ambient gradients only, never as a distinct "section color"
+  deep: '#0F170F',
+  espresso: '#111811',
+  darkMoss: '#141C15',
+  elevated: '#1E251B',
 
-  gold: '#C5A880',
-  goldLight: '#D4BFA0',
-  gold25: 'rgba(197,168,128,0.25)',
-  gold15: 'rgba(197,168,128,0.15)',
+  // Muted olive/stone — borders and low-contrast detail only
+  border: '#454939',
+  border25: 'rgba(69,73,57,0.25)',
+  border15: 'rgba(69,73,57,0.15)',
 
-  ivory: '#EAE2D3',
-  ivory70: 'rgba(234,226,211,0.7)',
-  ivory45: 'rgba(234,226,211,0.45)',
-  ivory25: 'rgba(234,226,211,0.25)',
-  ivory12: 'rgba(234,226,211,0.12)',
+  gold: '#B49A62',
+  goldLight: '#C7AE7D',
+  gold25: 'rgba(180,154,98,0.25)',
+  gold15: 'rgba(180,154,98,0.15)',
+
+  ivory: '#E6E1D5',
+  ivory70: 'rgba(230,225,213,0.7)',
+  ivory45: 'rgba(230,225,213,0.45)',
+  ivory25: 'rgba(230,225,213,0.25)',
+  ivory12: 'rgba(230,225,213,0.12)',
 };

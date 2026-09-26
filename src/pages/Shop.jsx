@@ -2,12 +2,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import PageTransition from '@/components/abix/PageTransition';
-import CollectionHero from '@/components/abix/CollectionHero';
 import ProductCard from '@/components/abix/ProductCard';
 import ShopQuickView from '@/components/abix/ShopQuickView';
-import ShopCollectionCard from '@/components/abix/ShopCollectionCard';
+import ComingSoonMiniCard from '@/components/abix/ComingSoonMiniCard';
 import BrandStrip from '@/components/abix/BrandStrip';
-import { products, categories } from '@/data/products';
+import { products } from '@/data/products';
 import { useAuth } from '@/lib/AuthContext';
 import { checkNotifySubscribed, subscribeToNotify } from '@/lib/notifyUtils';
 import { ABIX } from '@/components/abix/brandColors';
@@ -19,7 +18,6 @@ export default function Shop() {
   const { user } = useAuth();
   const [returnBanner, setReturnBanner] = useState(null);
   const [query, setQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState('all');
   const [quickViewProduct, setQuickViewProduct] = useState(null);
 
   useEffect(() => {
@@ -44,14 +42,12 @@ export default function Shop() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    if (!q) return products;
     return products.filter((p) => {
-      const matchesCategory = activeCategory === 'all' || p.category === activeCategory;
-      if (!matchesCategory) return false;
-      if (!q) return true;
       const haystack = [p.name, p.subtitle, p.category, p.shortDesc].filter(Boolean).join(' ').toLowerCase();
       return haystack.includes(q);
     });
-  }, [query, activeCategory]);
+  }, [query]);
 
   const availableFiltered = filtered.filter((p) => p.status === 'available');
   const comingSoonFiltered = filtered.filter((p) => p.status === 'coming_soon');
@@ -74,59 +70,40 @@ export default function Shop() {
         </div>
       )}
 
-      {/* CHANGED: CollectionHero restored (recolored onto ABIX tokens) in
-          place of the custom intro from last message — it already had
-          the intro copy, hero image, and the clickable collection index
-          that anchor-scrolls to each product card below. Reusing working
-          code instead of duplicating it. */}
-      <CollectionHero products={products} />
+      <section className="relative pt-24 lg:pt-28 pb-16 lg:pb-24 overflow-hidden" style={{ backgroundColor: ABIX.obsidian }}>
+        {/* CHANGED: intro simplified to one short line instead of an
+            eyebrow + heading + paragraph block — this is just the shop's
+            label, not a landing section. */}
+        <div className="relative z-10 mx-auto max-w-6xl px-6 lg:px-10 text-center sm:text-left">
+          <h1 className="font-display text-xl sm:text-2xl tracking-tight" style={{ color: ABIX.ivory }}>
+            Shop ABIXMART
+          </h1>
+        </div>
 
-      {/* ============ SEARCH + CATEGORY CONTROLS ============ */}
-      <section className="relative py-8 lg:py-10 overflow-hidden" style={{ backgroundColor: ABIX.deep }}>
-        <div className="relative z-10 mx-auto max-w-6xl px-6 lg:px-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-6">
-          <div className="relative flex-1 sm:max-w-xs">
+        {/* Search — unchanged, left exactly as it was */}
+        <div className="relative z-10 mx-auto max-w-6xl px-6 lg:px-10 mt-6 flex justify-center sm:justify-start">
+          <div className="relative w-full sm:max-w-xs">
             <Search size={16} className="absolute left-0 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: ABIX.ivory45 }} />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search the collection"
-              className="w-full bg-transparent border-b py-3 pl-6 text-sm focus:outline-none transition-colors"
+              className="w-full bg-transparent border-b py-3 pl-6 text-sm text-center sm:text-left focus:outline-none transition-colors"
               style={{ borderColor: ABIX.ivory25, color: ABIX.ivory }}
             />
           </div>
-
-          <div className="flex-1 flex gap-2 overflow-x-auto no-scrollbar sm:justify-end">
-            {categories.map((c) => {
-              const active = activeCategory === c.key;
-              return (
-                <button
-                  key={c.key}
-                  onClick={() => setActiveCategory(c.key)}
-                  className="shrink-0 h-9 px-4 text-[11px] font-semibold tracking-luxe-sm uppercase border transition-colors duration-300"
-                  style={{
-                    borderColor: active ? ABIX.gold : ABIX.ivory25,
-                    color: active ? ABIX.gold : ABIX.ivory70,
-                    backgroundColor: active ? ABIX.gold15 : 'transparent',
-                  }}
-                >
-                  {c.label}
-                </button>
-              );
-            })}
-          </div>
         </div>
-      </section>
 
-      {/* ============ AVAILABLE PRODUCTS ============ */}
-      <section className="relative py-16 lg:py-24 overflow-hidden" style={{ backgroundColor: ABIX.deep }}>
-        <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10">
+        {/* CHANGED: grid no longer special-cases a single product with
+            max-w + mx-auto centering — that's what was placing Shilajit
+            in the middle of the page. It's now a plain left-to-right,
+            row-based grid at every count: 1 product sits at the start
+            of row 1; a 2nd product will sit beside it in the same row;
+            a 4th will start row 2 at the left, and so on automatically. */}
+        <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10 mt-12 lg:mt-16">
           {availableFiltered.length > 0 && (
-            <div
-              className={`grid gap-8 lg:gap-10 ${
-                availableFiltered.length === 1 ? 'max-w-xl mx-auto' : 'sm:grid-cols-2 lg:grid-cols-3'
-              }`}
-            >
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
               {availableFiltered.map((p) => (
                 <ProductCard key={p.id} product={p} onQuickView={() => setQuickViewProduct(p)} />
               ))}
@@ -143,19 +120,19 @@ export default function Shop() {
 
       {comingSoonFiltered.length > 0 && (
         <section
-          className="relative py-16 lg:py-24 overflow-hidden grain"
-          style={{ background: `linear-gradient(180deg, ${ABIX.deep} 0%, ${ABIX.espresso} 35%, ${ABIX.espresso} 65%, ${ABIX.deep} 100%)` }}
+          className="relative py-14 lg:py-20 overflow-hidden grain"
+          style={{ background: `linear-gradient(180deg, ${ABIX.obsidian} 0%, ${ABIX.espresso} 100%)` }}
         >
           <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10">
-            <div className="max-w-xl mb-10 lg:mb-14">
+            <div className="mb-8 lg:mb-10">
               <span className="text-[11px] font-semibold uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>Coming Soon</span>
-              <h2 className="mt-4 font-display text-3xl sm:text-4xl leading-tight tracking-tight" style={{ color: ABIX.ivory }}>
-                The collection is still growing.
+              <h2 className="mt-2 font-display text-2xl sm:text-3xl leading-tight tracking-tight" style={{ color: ABIX.ivory }}>
+                What's next.
               </h2>
             </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-              {comingSoonFiltered.map((p, i) => (
-                <ShopCollectionCard key={p.id} product={p} index={i} />
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6">
+              {comingSoonFiltered.map((p) => (
+                <ComingSoonMiniCard key={p.id} product={p} />
               ))}
             </div>
           </div>

@@ -4,41 +4,50 @@
 
 @layer base {
   :root {
-    --background: 40 38% 95%;      /* #F7F3EA warm ivory */
-    --foreground: 120 6% 12%;      /* #1D211D primary text */
-    --card: 0 0% 100%;
-    --card-foreground: 120 6% 12%;
-    --popover: 40 38% 95%;
-    --popover-foreground: 120 6% 12%;
-    --primary: 150 30% 13%;        /* #142621 muted charcoal-forest, not spa-green */
-    --primary-foreground: 40 30% 95%;
-    --secondary: 36 18% 89%;       /* warm mineral sand */
-    --secondary-foreground: 150 30% 13%;
-    --muted: 36 18% 89%;
-    --muted-foreground: 25 8% 35%;
-    --accent: 100 7% 45%;          /* muted moss — restrained, not dominant */
-    --accent-foreground: 40 30% 95%;
+    /* ABIXMART — near-black botanical global palette. One continuous
+       dark environment: background, card, primary, secondary, muted,
+       charcoal, espresso, clay, stone, moss and sand are all subtle
+       elevation steps within the SAME near-black green family, rather
+       than separate brown/beige/green surfaces. Warm ivory is the one
+       light tone (text); muted antique gold is the one restrained
+       accent (was resin-amber, now the ABIXMART gold used everywhere
+       else in the project via brandColors.js). */
+    --background: 129 24% 6%;      /* #0B120C dominant near-black botanical */
+    --foreground: 42 25% 87%;      /* #E6E1D5 warm ivory */
+    --card: 120 17% 8%;            /* #111811 subtle elevation off background */
+    --card-foreground: 42 25% 87%;
+    --popover: 120 17% 8%;
+    --popover-foreground: 42 25% 87%;
+    --primary: 120 21% 7%;         /* #0F170F */
+    --primary-foreground: 42 25% 87%;
+    --secondary: 102 16% 13%;      /* #1E251B */
+    --secondary-foreground: 42 25% 87%;
+    --muted: 120 17% 8%;           /* #111811 */
+    --muted-foreground: 42 15% 62%; /* softened ivory */
+    --accent: 75 12% 25%;          /* #454939 muted olive/stone — restrained detail only */
+    --accent-foreground: 42 25% 87%;
     --destructive: 0 62% 45%;
     --destructive-foreground: 40 30% 95%;
-    --border: 36 14% 85%;
-    --input: 36 14% 85%;
-    --ring: 27 57% 35%;              /* resin amber */
-    /* --gold now points to the resin-amber accent — every existing
-       text-gold/bg-gold usage across the project inherits the new
-       product-specific accent automatically, no per-component rename. */
-    --gold: 27 57% 35%;              /* #8B5326 resin amber — the color of the actual resin, not jewelry gold */
-    --gold-light: 30 53% 55%;        /* lighter resin tint, for accents on dark surfaces */
-    --moss: 100 7% 45%;
-    --sand: 36 18% 89%;
-    --ivory: 40 30% 96%;             /* slightly cooler/quieter warm ivory */
-    --green-deep: 150 30% 13%;       /* muted charcoal-forest — restrained anchor, not a section-fill color */
-    --stone: 32 14% 60%;             /* mineral Himalayan stone neutral */
-    --stone-dark: 30 12% 40%;
-    --charcoal: 20 14% 8%;           /* near-black warm charcoal — primary dominant surface */
-    --espresso: 24 37% 13%;          /* deep warm brown — secondary dominant surface */
-    --clay: 30 29% 27%;              /* warm mid clay/taupe — tertiary surface, the "warm earth" peak */
-    --resin: 27 57% 35%;             /* explicit alias of --gold, for new components */
-    --resin-light: 30 53% 55%;
+    --border: 75 12% 20%;          /* muted olive, low-contrast — borders should almost disappear */
+    --input: 75 12% 20%;
+    --ring: 41 35% 54%;            /* gold */
+    /* --gold now points to the restrained ABIXMART antique gold
+       (#B49A62) rather than the old resin-amber — every existing
+       text-gold/bg-gold usage across the project inherits this
+       automatically, no per-component rename. */
+    --gold: 41 35% 54%;            /* #B49A62 muted antique gold */
+    --gold-light: 41 40% 68%;
+    --moss: 102 16% 13%;           /* darkened into the same family — no longer a separate mid-tone green */
+    --sand: 120 17% 8%;            /* darkened into the same family — no longer a light beige surface */
+    --ivory: 42 25% 87%;
+    --green-deep: 129 24% 6%;      /* aligned with background — the deepest botanical anchor */
+    --stone: 75 12% 30%;
+    --stone-dark: 75 12% 18%;
+    --charcoal: 129 24% 6%;        /* dominant surface — same near-black-green as background, not a warm brown */
+    --espresso: 120 17% 8%;        /* secondary surface — a depth step, not a distinct brown */
+    --clay: 102 16% 13%;           /* tertiary surface — a depth step, not warm earth/taupe */
+    --resin: 41 35% 54%;           /* explicit alias of --gold */
+    --resin-light: 41 40% 68%;
     --chart-1: 150 30% 13%;
     --chart-2: 100 7% 45%;
     --chart-3: 27 57% 35%;
@@ -89,15 +98,9 @@
   .font-heading { font-family: var(--font-heading); }
   .font-grotesk { font-family: var(--font-grotesk); }
 
-  /* Hides the scrollbar on horizontally-scrollable strips (e.g. the
-     Account page's mobile nav tabs) while keeping them scrollable. */
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   .no-scrollbar::-webkit-scrollbar { display: none; }
 
-  /* Modern e-commerce numeral style for prices, quantities and other
-     prominent UI numbers — deliberately sans-serif (not the editorial
-     Cormorant Garamond used for headings) so digits and the ₹ symbol
-     sit cleanly together. Moderately bold, not decorative. */
   .font-price {
     font-family: var(--font-body);
     font-weight: 600;
@@ -135,11 +138,6 @@
     @apply w-full bg-transparent border-b border-charcoal/25 py-3 text-charcoal placeholder:text-foreground/35 focus:outline-none focus:border-resin transition-colors text-base;
   }
 
-  /* Same role as .express-input, for the translucent dark auth panels
-     (Login/Create Account/Forgot Password/AuthAction) sitting over the
-     cinematic mineral/resin photography — ivory text on a light-ivory
-     underline so it reads against a dark glass surface instead of a
-     white card. */
   .express-input-inverse {
     @apply w-full bg-transparent border-b border-ivory/25 py-3 text-ivory placeholder:text-ivory/35 focus:outline-none focus:border-gold-light transition-colors text-base;
   }
@@ -154,55 +152,33 @@
 }
 
 @layer components {
-  /* ---------------------------------------------------------------
-     GLOBAL ABIXMART DESIGN SYSTEM
-     Reusable rules built entirely on existing tokens (charcoal, resin,
-     espresso, clay, sand, ivory, gold-light) — no new one-off colors.
-     Not used by any Home-page component (those use inline utilities
-     directly); this layer exists for Shop/About/Support/ProductDetail/
-     Cart/Checkout/Account/auth pages.
-     --------------------------------------------------------------- */
-
-  /* Micro-labels: eyebrows, tab labels, step counters, field labels —
-     anywhere a small uppercase caption appears outside the <Eyebrow>
-     component itself. */
   .label-meta {
     @apply font-grotesk text-[10px] uppercase tracking-luxe-sm;
   }
 
-  /* Buttons — shared geometry/type; color comes from a second class. */
   .btn {
     @apply inline-flex items-center justify-center h-14 px-8 text-[12px] font-semibold tracking-luxe-sm uppercase rounded-none transition-colors duration-300 disabled:opacity-40 disabled:pointer-events-none;
   }
-  /* Solid dark — the default primary action on light/sand/ivory surfaces. */
   .btn-primary {
     @apply btn bg-charcoal text-ivory hover:bg-resin hover:text-ivory;
   }
-  /* Solid light — the primary action on dark surfaces (espresso/clay/charcoal),
-     visually equivalent role to .btn-primary, just inverted for contrast. */
   .btn-primary-inverse {
     @apply btn bg-ivory text-charcoal hover:bg-resin hover:text-ivory;
   }
-  /* Outlined — secondary action, works on light surfaces. */
   .btn-outline {
     @apply btn border border-charcoal text-charcoal bg-transparent hover:bg-charcoal hover:text-ivory;
   }
-  /* Outlined — secondary action, works on dark surfaces. */
   .btn-outline-inverse {
     @apply btn border border-ivory text-ivory bg-transparent hover:bg-ivory hover:text-charcoal;
   }
-  /* Accent — resin-amber, reserved for a single emphasis action per view
-     (e.g. "Buy now" next to a plain "Add to cart"). Not for routine use. */
   .btn-accent {
     @apply btn bg-resin text-ivory hover:bg-gold-light hover:text-charcoal;
   }
 
-  /* Cards — light-surface product/content tiles. */
   .card-surface {
     @apply bg-ivory border border-charcoal/10;
   }
 
-  /* Badges — small status/category tags. */
   .badge {
     @apply label-meta inline-flex items-center px-2.5 py-1 bg-charcoal/8 text-charcoal;
   }

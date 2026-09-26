@@ -12,9 +12,11 @@ const PRINCIPLES = [
 
 export default function BrandStrip() {
   return (
+    // CHANGED: top stop is now Espresso, matching Coming Soon's new
+    // bottom color exactly — no seam at that boundary either.
     <section
       className="py-12 lg:py-16"
-      style={{ background: `linear-gradient(180deg, ${ABIX.deep} 0%, ${ABIX.obsidian} 100%)` }}
+      style={{ background: `linear-gradient(180deg, ${ABIX.espresso} 0%, ${ABIX.obsidian} 100%)` }}
     >
       <div className="mx-auto max-w-7xl px-6 lg:px-10">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-6">

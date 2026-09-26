@@ -141,6 +141,21 @@ export const products = [
     status: "available",
     image: PRODUCT_IMAGE,
     shopImage: shilajitShop,
+     howToTakeRoute: "/how-to-take-shilajit",
+    shortDesc: "Sourced from the high Himalayas and traditionally purified.",
+    description:
+      "Sourced from the high Himalayas and traditionally purified, ABIXMART Pure Shilajit Resin is crafted to be part of your daily wellness ritual — slow, deliberate, and considered.",
+    facts: [
+      { label: "Origin", value: "High Himalayas" },
+      { label: "Form", value: "Pure Resin" },
+      { label: "Net Weight", value: "20g" },
+      { label: "Crafted", value: "Traditional purification" },
+    ],
+    howToUse: [
+      "Dissolve a pea-sized portion (approx. 250–300mg) in warm water or milk.",
+      "Consume once daily, ideally in the morning.",
+      "Store in a cool, dry place away from direct sunlight.",
+    ],
     shortDesc: "Sourced from the high Himalayas and traditionally purified.",
     description:
       "Sourced from the high Himalayas and traditionally purified, ABIXMART Pure Shilajit Resin is crafted to be part of your daily wellness ritual — slow, deliberate, and considered.",
