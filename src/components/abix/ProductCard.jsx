@@ -11,6 +11,11 @@ import { ABIX } from './brandColors';
 // handled entirely by the grid in Shop.jsx, so the card itself always
 // renders at a natural width and sits wherever the grid places it
 // (top-left first, filling left-to-right/row-wise as more are added).
+//
+// CHANGED (price/category row): category (small, gold, uppercase label)
+// is now on the LEFT and price (larger, ivory, bold) is on the RIGHT —
+// price reads as the dominant value on the card instead of competing
+// with the label for the same weight.
 export default function ProductCard({ product, onQuickView }) {
   const { addToCart } = useShop();
 
@@ -81,11 +86,11 @@ export default function ProductCard({ product, onQuickView }) {
         <h3 className="font-display text-lg leading-tight" style={{ color: ABIX.ivory }}>{product.name}</h3>
         <p className="mt-1 text-xs leading-relaxed line-clamp-2" style={{ color: ABIX.ivory45 }}>{product.shortDesc}</p>
         <div className="mt-3 flex items-center justify-between">
-          <span className="font-price text-lg" style={{ color: ABIX.ivory }}>
-            {product.currency}{product.price}
-          </span>
           <span className="text-[9px] font-semibold uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>
             {product.category}
+          </span>
+          <span className="font-price text-xl font-semibold" style={{ color: ABIX.ivory }}>
+            {product.currency}{product.price}
           </span>
         </div>
 

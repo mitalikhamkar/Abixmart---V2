@@ -1,6 +1,7 @@
 // src/components/abix/ShopQuickView.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingBag, BookOpen } from 'lucide-react';
 import { useGSAP } from '@gsap/react';
 import { gsap } from '@/lib/gsap';
@@ -11,22 +12,56 @@ const HOW_TO_TAKE_ROUTES = {
   shilajit: '/how-to-take-shilajit',
 };
 
+// Info panel children reveal one-by-one (staggered), not all at once.
+const infoContainerVariants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.12, delayChildren: 0.1 } },
+};
+const infoItemVariants = {
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] } },
+};
+
+// CHANGED: the center -> left layout move is handled entirely by
+// Framer Motion's `layout` prop (FLIP-based, smoothly interpolates real
+// layout every frame). The info content fades in AFTER the layout
+// motion has settled, and each element (label, title, description,
+// price, buttons) reveals in its own staggered step instead of
+// popping in together.
+//
+// Scan effect: a thin gold line sweeps down the product 4 times while
+// an ambient glow breathes behind it, then both fade out before the
+// layout shifts left and the info panel reveals.
 export default function ShopQuickView({ product, onClose }) {
   const navigate = useNavigate();
   const { addToCart } = useShop();
   const [phase, setPhase] = useState('scan'); // 'scan' | 'clearing' | 'info'
 
-  const rootRef = useRef(null);
+  const frameScopeRef = useRef(null);
   const imageRef = useRef(null);
   const scanOverlayRef = useRef(null);
+  const pulseRef = useRef(null);
   const sweepRef = useRef(null);
-  const infoRef = useRef(null);
 
   useEffect(() => {
     setPhase('scan');
   }, [product]);
 
-  // Phase 1: thin line sweeps top -> bottom -> top over the product
+  // Lock page scroll while the modal is open — the width-changing
+  // layout animation on the image/info columns can overshoot by a
+  // sub-pixel during the transition, which was showing up as a stray
+  // horizontal scrollbar on the page behind the modal.
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
+  // Phase 1: product frame appears, a thin gold line sweeps down the
+  // product 4 times while the ambient glow breathes behind it, then
+  // everything fades out into the info reveal.
   useGSAP(
     () => {
       if (phase !== 'scan') return;
@@ -39,22 +74,27 @@ export default function ShopQuickView({ product, onClose }) {
 
       gsap.set(imageRef.current, { opacity: 0, scale: 0.85, rotation: -5, y: 16 });
       gsap.set(scanOverlayRef.current, { opacity: 0 });
-      gsap.set(sweepRef.current, { top: '8%' });
+      gsap.set(pulseRef.current, { opacity: 0, scale: 0.92 });
+      gsap.set(sweepRef.current, { top: '86%', opacity: 0 });
 
       gsap
         .timeline({ onComplete: () => setPhase('clearing') })
         .to(imageRef.current, { opacity: 1, scale: 1, rotation: 0, y: 0, duration: 0.8, ease: 'power3.out' }, 0)
-        .to(scanOverlayRef.current, { opacity: 1, duration: 0.4 }, 0.5)
-        .to(sweepRef.current, { top: '92%', duration: 1.4, ease: 'sine.inOut' }, 0.8)
-        .to(sweepRef.current, { top: '8%', duration: 1.2, ease: 'sine.inOut' }, 2.2);
+        .to(scanOverlayRef.current, { opacity: 1, duration: 0.4 }, 0.3)
+        .to(pulseRef.current, { opacity: 1, scale: 1, duration: 0.5, ease: 'power2.out' }, 0.5)
+        .to(sweepRef.current, { opacity: 1, duration: 0.25 }, 0.5)
+        // Up, down, up, down — a plain yoyo tween: it travels to the top,
+        // reverses back to the bottom (yoyo), then repeats that same
+        // up/down cycle once more (repeat: 3 = 4 passes total). Moderate
+        // 0.9s per pass so it reads as a deliberate scan, not a flicker.
+        .to(sweepRef.current, { top: '14%', duration: 0.9, ease: 'sine.inOut', repeat: 3, yoyo: true }, 0.6)
+        .to([sweepRef.current, pulseRef.current], { opacity: 0, duration: 0.35 }, 4.1);
     },
-    { scope: rootRef, dependencies: [phase, product] }
+    { scope: frameScopeRef, dependencies: [phase, product] }
   );
 
-  // Phase 2: the entire scan overlay group (grid, glow, line, tick
-  // marks, corner brackets) fades out TOGETHER, then unmounts. This
-  // is what guarantees nothing gold is ever left sitting on the
-  // product after the scan completes.
+  // Phase 2: scan overlay group fades out fully, THEN unmounts —
+  // guarantees nothing gold is ever left on the product.
   useGSAP(
     () => {
       if (phase !== 'clearing') return;
@@ -70,22 +110,7 @@ export default function ShopQuickView({ product, onClose }) {
         onComplete: () => setPhase('info'),
       });
     },
-    { scope: rootRef, dependencies: [phase] }
-  );
-
-  // Phase 3: info reveals only once the scan overlay is fully gone
-  useGSAP(
-    () => {
-      if (phase !== 'info') return;
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (reduceMotion) {
-        gsap.set(infoRef.current, { opacity: 1, y: 0 });
-        return;
-      }
-      gsap.set(infoRef.current, { opacity: 0, y: 16 });
-      gsap.to(infoRef.current, { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out', delay: 0.1 });
-    },
-    { scope: rootRef, dependencies: [phase] }
+    { scope: frameScopeRef, dependencies: [phase] }
   );
 
   const showInfo = phase === 'info';
@@ -104,13 +129,12 @@ export default function ShopQuickView({ product, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 overflow-hidden">
       <div className="absolute inset-0 backdrop-blur-sm" style={{ backgroundColor: `${ABIX.obsidian}CC` }} onClick={onClose} />
 
       <div
-        ref={rootRef}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-4xl overflow-y-auto max-h-[92vh]"
+        className="relative w-full max-w-4xl overflow-y-auto overflow-x-hidden max-h-[92vh]"
         style={{ backgroundColor: ABIX.obsidian }}
       >
         <button
@@ -123,12 +147,15 @@ export default function ShopQuickView({ product, onClose }) {
         </button>
 
         <div className="flex flex-col lg:flex-row">
-          <div
-            className={`shrink-0 p-6 sm:p-10 flex items-center justify-center transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-              showInfo ? 'lg:w-1/2' : 'lg:w-full'
-            }`}
+          {/* Image column */}
+          <motion.div
+            layout
+            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            className="p-6 sm:p-10 flex items-center justify-center"
+            style={{ width: '100%', flex: showInfo ? '0 0 50%' : '0 0 100%' }}
           >
             <div
+              ref={frameScopeRef}
               className="relative w-full max-w-[340px] aspect-[4/5] overflow-hidden"
               style={{ background: `linear-gradient(160deg, ${ABIX.espresso} 0%, ${ABIX.obsidian} 100%)` }}
             >
@@ -144,7 +171,7 @@ export default function ShopQuickView({ product, onClose }) {
               </div>
 
               {showScanOverlay && (
-                <div ref={scanOverlayRef} className="absolute inset-0 pointer-events-none">
+                <div ref={scanOverlayRef} className="absolute inset-0 overflow-hidden pointer-events-none">
                   <div
                     className="absolute inset-0 z-0"
                     style={{
@@ -153,28 +180,31 @@ export default function ShopQuickView({ product, onClose }) {
                       opacity: 0.25,
                     }}
                   />
+                  {/* Ambient breathing glow behind the product. */}
                   <div
+                    ref={pulseRef}
                     className="absolute inset-0 z-0"
-                    style={{ background: `radial-gradient(ellipse at 50% 55%, ${ABIX.gold15}, transparent 68%)` }}
+                    style={{
+                      background: `radial-gradient(ellipse at 50% 50%, ${ABIX.gold25} 0%, ${ABIX.gold15} 45%, transparent 72%)`,
+                    }}
                   />
 
-                  {/* Thin line of light — not a wide bar. A soft blurred
-                      glow sits behind a crisp 2px line for falloff. */}
-                  <div
-                    ref={sweepRef}
-                    className="absolute inset-x-0 z-20"
-                    style={{ height: '24px', marginTop: '-12px' }}
-                  >
+                  {/* Thin gold line bouncing up/down across the product,
+                      4 passes total, before fading out into the info
+                      reveal. Travel range kept inside 14%–86% (not
+                      edge-to-edge) so the blurred glow around the line
+                      never bleeds past the frame border. */}
+                  <div ref={sweepRef} className="absolute inset-x-4 z-20" style={{ height: '16px', marginTop: '-8px' }}>
                     <div
                       className="absolute inset-0"
                       style={{
-                        background: `linear-gradient(180deg, transparent 0%, ${ABIX.gold25} 45%, ${ABIX.gold25} 55%, transparent 100%)`,
-                        filter: 'blur(6px)',
+                        background: `linear-gradient(180deg, transparent 0%, ${ABIX.gold15} 45%, ${ABIX.gold15} 55%, transparent 100%)`,
+                        filter: 'blur(3px)',
                       }}
                     />
                     <div
-                      className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[2px]"
-                      style={{ backgroundColor: ABIX.gold, boxShadow: `0 0 6px ${ABIX.gold}, 0 0 2px ${ABIX.goldLight}` }}
+                      className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1.5px]"
+                      style={{ backgroundColor: ABIX.gold, boxShadow: `0 0 4px ${ABIX.gold}` }}
                     />
                   </div>
 
@@ -199,65 +229,74 @@ export default function ShopQuickView({ product, onClose }) {
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
 
-          <div
-            className={`overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] p-6 sm:p-10 flex flex-col justify-center min-h-[200px] ${
-              showInfo ? 'lg:w-1/2 opacity-100' : 'lg:w-0 opacity-0 lg:p-0'
-            }`}
+          {/* Info column — content reveals one item at a time via
+              staggerChildren, instead of popping in as a single block. */}
+          <motion.div
+            layout
+            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            className="overflow-hidden p-6 sm:p-10 flex flex-col justify-center min-h-[200px]"
+            style={{ flex: showInfo ? '0 0 50%' : '0 0 0%' }}
           >
-            {showInfo && (
-              <div ref={infoRef}>
-                <span className="text-[11px] font-semibold uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>
-                  {product.subtitle}
-                </span>
-                <h3 className="mt-3 font-display text-3xl leading-tight" style={{ color: ABIX.ivory }}>
-                  {product.name}
-                </h3>
-                <p className="mt-4 text-sm leading-relaxed" style={{ color: ABIX.ivory70 }}>
-                  {product.description || product.shortDesc}
-                </p>
-
-                <div className="mt-7 flex items-center gap-4">
-                  <span className="font-price text-2xl" style={{ color: ABIX.ivory }}>
-                    {product.currency}{product.price}
-                  </span>
-                  <span className="text-[10px] font-semibold uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>
-                    Available
-                  </span>
-                </div>
-
-                <div className="mt-6 flex flex-col gap-3">
-                  <button
-                    onClick={handleAddToCart}
-                    className="inline-flex items-center justify-center gap-2 rounded-full text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300"
-                    style={{ backgroundColor: ABIX.gold, color: ABIX.obsidian, height: 52 }}
+            <AnimatePresence>
+              {showInfo && (
+                <motion.div key="info" variants={infoContainerVariants} initial="hidden" animate="show" exit={{ opacity: 0 }}>
+                  <motion.span
+                    variants={infoItemVariants}
+                    className="block text-[11px] font-semibold uppercase tracking-luxe-sm"
+                    style={{ color: ABIX.gold }}
                   >
-                    <ShoppingBag size={15} /> Add to Cart
-                  </button>
+                    {product.subtitle}
+                  </motion.span>
+                  <motion.h3 variants={infoItemVariants} className="mt-3 font-display text-3xl leading-tight" style={{ color: ABIX.ivory }}>
+                    {product.name}
+                  </motion.h3>
+                  <motion.p variants={infoItemVariants} className="mt-4 text-sm leading-relaxed" style={{ color: ABIX.ivory70 }}>
+                    {product.description || product.shortDesc}
+                  </motion.p>
 
-                  {howToTakeRoute && (
+                  <motion.div variants={infoItemVariants} className="mt-7 flex items-center gap-4">
+                    <span className="font-price text-2xl" style={{ color: ABIX.ivory }}>
+                      {product.currency}{product.price}
+                    </span>
+                    <span className="text-[10px] font-semibold uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>
+                      Available
+                    </span>
+                  </motion.div>
+
+                  <motion.div variants={infoItemVariants} className="mt-6 flex flex-col gap-3">
                     <button
-                      onClick={handleHowToTake}
-                      className="inline-flex items-center justify-center gap-2 rounded-full text-[12px] font-semibold tracking-luxe-sm uppercase border transition-colors duration-300"
-                      style={{ borderColor: ABIX.ivory25, color: ABIX.ivory, height: 52 }}
+                      onClick={handleAddToCart}
+                      className="inline-flex items-center justify-center gap-2 rounded-full text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300"
+                      style={{ backgroundColor: ABIX.gold, color: ABIX.obsidian, height: 52 }}
                     >
-                      <BookOpen size={15} /> How to Take
+                      <ShoppingBag size={15} /> Add to Cart
                     </button>
-                  )}
 
-                  <Link
-                    to={`/shop/${product.slug}`}
-                    onClick={onClose}
-                    className="text-center text-[11px] uppercase tracking-luxe-sm mt-1 transition-colors"
-                    style={{ color: ABIX.ivory45 }}
-                  >
-                    View Full Product →
-                  </Link>
-                </div>
-              </div>
-            )}
-          </div>
+                    {howToTakeRoute && (
+                      <button
+                        onClick={handleHowToTake}
+                        className="inline-flex items-center justify-center gap-2 rounded-full text-[12px] font-semibold tracking-luxe-sm uppercase border transition-colors duration-300"
+                        style={{ borderColor: ABIX.ivory25, color: ABIX.ivory, height: 52 }}
+                      >
+                        <BookOpen size={15} /> How to Take
+                      </button>
+                    )}
+
+                    <Link
+                      to={`/shop/${product.slug}`}
+                      onClick={onClose}
+                      className="text-center text-[11px] uppercase tracking-luxe-sm mt-1 transition-colors"
+                      style={{ color: ABIX.ivory45 }}
+                    >
+                      View Full Product →
+                    </Link>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
         </div>
       </div>
     </div>

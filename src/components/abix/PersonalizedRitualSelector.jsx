@@ -3,10 +3,13 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AGE_GROUPS, GENDERS, getAgeLabel, getGenderLabel } from '@/data/ritualStories';
+import { ABIX } from '@/components/abix/brandColors';
 
-const IVORY = '#F2ECE2';
-const MUTED = '#A79C8D';
-const AMBER = '#D3A467';
+// CHANGED: these now alias the centralized ABIX token system instead of
+// hardcoded hex — every usage further down the file is untouched.
+const IVORY = ABIX.ivory;
+const MUTED = ABIX.ivory45;
+const AMBER = ABIX.goldLight;
 
 // Reused on both Home (compact section) and the dedicated page's
 // "Personalize your ritual" fallback — same component, same logic.
@@ -132,9 +135,9 @@ export default function PersonalizedRitualSelector() {
               type="button"
               onClick={goToRitual}
               className="mt-6 inline-flex items-center justify-center h-12 px-8 text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300"
-              style={{ background: '#BE8A4B', color: '#151417' }}
+              style={{ background: ABIX.gold, color: ABIX.obsidian }}
               onMouseEnter={(e) => (e.currentTarget.style.background = AMBER)}
-              onMouseLeave={(e) => (e.currentTarget.style.background = '#BE8A4B')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = ABIX.gold)}
             >
               See My Ritual
             </button>

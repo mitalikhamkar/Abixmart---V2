@@ -1,10 +1,13 @@
 // src/components/abix/FAQAccordion.jsx
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ABIX } from './brandColors';
 
-const IVORY = '#F2ECE2';
-const MUTED = '#A79C8D';
-const AMBER = '#D3A467';
+// CHANGED: these now alias the centralized ABIX token system instead of
+// hardcoded hex — every usage further down the file is untouched.
+const IVORY = ABIX.ivory;
+const MUTED = ABIX.ivory45;
+const AMBER = ABIX.goldLight;
 
 // Editorial FAQ interaction: numbered indicator + growing amber line,
 // rather than a generic plus/minus accordion. Keyboard accessible with

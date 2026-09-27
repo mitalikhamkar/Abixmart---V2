@@ -7,10 +7,13 @@ import Eyebrow from '@/components/abix/Eyebrow';
 import PersonalizedRitualTimeline from '@/components/abix/PersonalizedRitualTimeline';
 import PersonalizedRitualSelector from '@/components/abix/PersonalizedRitualSelector';
 import { AGE_GROUPS, GENDERS } from '@/data/ritualStories';
+import { ABIX } from '@/components/abix/brandColors';
 
-const INK = '#151417';
-const IVORY = '#F2ECE2';
-const MUTED = '#A79C8D';
+// CHANGED: these now alias the centralized ABIX token system instead of
+// hardcoded hex — every usage further down the file is untouched.
+const INK = ABIX.obsidian;
+const IVORY = ABIX.ivory;
+const MUTED = ABIX.ivory45;
 
 export default function HowToTakeShilajit() {
   const [searchParams] = useSearchParams();
@@ -27,27 +30,34 @@ export default function HowToTakeShilajit() {
 
   return (
     <PageTransition>
-      {/* HERO */}
-      <section className="relative pt-24 lg:pt-32 pb-16 lg:pb-20" style={{ background: INK }}>
+      {/* HERO — shrunk down and Back button pulled out of the centered
+          column into a real top-left corner position (it was sharing
+          the centered flex row with the eyebrow before, which is why it
+          read as floating dead-center). The hero itself is also
+          shorter now so the actual question below (age/gender, or the
+          six-scene story) is what the page reads as being "about",
+          instead of getting buried under an oversized title block. */}
+      <section className="relative pt-16 lg:pt-20 pb-8 lg:pb-10" style={{ background: INK }}>
         <div className="absolute inset-0 grain opacity-[0.04] pointer-events-none" />
-        <div className="relative mx-auto max-w-4xl px-6 lg:px-10 text-center">
-          <button
-            type="button"
-            onClick={handleBack}
-            className="inline-flex items-center gap-2 text-sm transition-colors mb-10"
-            style={{ color: MUTED }}
-          >
-            <ArrowLeft size={16} /> Back
-          </button>
 
+        <button
+          type="button"
+          onClick={handleBack}
+          className="absolute left-6 lg:left-10 top-6 lg:top-8 inline-flex items-center gap-2 text-sm transition-colors z-10"
+          style={{ color: MUTED }}
+        >
+          <ArrowLeft size={16} /> Back
+        </button>
+
+        <div className="relative mx-auto max-w-3xl px-6 lg:px-10 text-center">
           <Eyebrow light>Ritual Guide</Eyebrow>
           <h1
-            className="mt-5 font-display text-4xl sm:text-5xl lg:text-[56px] leading-[1.03] tracking-tight"
+            className="mt-4 font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.05] tracking-tight"
             style={{ color: IVORY }}
           >
             This Is How You Take Shilajit
           </h1>
-          <p className="mt-6 text-lg leading-relaxed max-w-2xl mx-auto" style={{ color: `${IVORY}B3` }}>
+          <p className="mt-4 text-base sm:text-lg leading-relaxed max-w-xl mx-auto" style={{ color: `${IVORY}B3` }}>
             A simple ritual, done consistently. Here's your ABIXMART story, scene by scene.
           </p>
         </div>
@@ -59,7 +69,7 @@ export default function HowToTakeShilajit() {
       {hasPersonalizedStory ? (
         <PersonalizedRitualTimeline age={validAge} gender={validGender} />
       ) : (
-        <section className="py-16 lg:py-24 border-t" style={{ background: '#1E1C1F', borderColor: `${IVORY}0D` }}>
+        <section className="pt-10 lg:pt-14 pb-16 lg:pb-24 border-t" style={{ background: ABIX.espresso, borderColor: `${IVORY}0D` }}>
           <div className="mx-auto max-w-2xl px-6 lg:px-10 text-center">
             <Eyebrow light>Personalize Your Ritual</Eyebrow>
             <div className="mt-8">

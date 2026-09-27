@@ -26,6 +26,7 @@ import {
   ritualBundles,
 } from '@/data/products';
 import { useAuth } from '@/lib/AuthContext';
+import { ABIX } from '@/components/abix/brandColors';
 
 import supportHero from '@/assets/support/support-hero.png';
 import supportHelpCards from '@/assets/support/support-help-cards.png';
@@ -42,13 +43,15 @@ const iconMap = {
   MessageCircle,
 };
 
-const INK = '#151417';
-const GRAPHITE = '#1E1C1F';
-const STONE = '#211E1F';
-const IVORY = '#F2ECE2';
-const MUTED = '#A79C8D';
-const AMBER = '#D3A467';
-const AMBER_FILL = '#BE8A4B';
+// CHANGED: these now alias the centralized ABIX token system instead of
+// hardcoded hex — every usage further down the file is untouched.
+const INK = ABIX.obsidian;
+const GRAPHITE = ABIX.espresso;
+const STONE = ABIX.deep;
+const IVORY = ABIX.ivory;
+const MUTED = ABIX.ivory45;
+const AMBER = ABIX.goldLight;
+const AMBER_FILL = ABIX.gold;
 
 // The "Choose Your Path" section has 6 cards but only 5 support images
 // exist in the project — there is no dedicated 6th photo. This maps each
@@ -237,7 +240,7 @@ export default function Support() {
   };
 
   const inputClass =
-    'w-full h-14 px-5 bg-transparent border text-[#F2ECE2] placeholder:text-[#A79C8D] focus:outline-none transition-colors';
+    'w-full h-14 px-5 bg-transparent border text-ivory placeholder:text-ivory/45 focus:outline-none transition-colors';
 
   return (
     <PageTransition>
@@ -264,9 +267,9 @@ export default function Support() {
           />
         </motion.div>
 
-        <div className="absolute inset-0 bg-gradient-to-t from-[#151417] via-[#151417]/60 to-[#151417]/15" />
+        <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/60 to-charcoal/15" />
 
-        <div className="absolute inset-0 bg-gradient-to-r from-[#151417]/75 via-[#151417]/15 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-charcoal/75 via-charcoal/15 to-transparent" />
 
         <div className="absolute inset-0 grain opacity-[0.05]" />
 
@@ -508,7 +511,7 @@ export default function Support() {
 
               <button
                 type="submit"
-                className="h-14 px-8 text-[#151417] text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300 shrink-0"
+                className="h-14 px-8 text-charcoal text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300 shrink-0"
                 style={{
                   background: AMBER_FILL,
                 }}
@@ -1077,7 +1080,7 @@ export default function Support() {
               <button
                 type="submit"
                 disabled={inquirySubmitting}
-                className="h-14 px-8 inline-flex items-center gap-3 text-[#151417] text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300 disabled:opacity-50"
+                className="h-14 px-8 inline-flex items-center gap-3 text-charcoal text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300 disabled:opacity-50"
                 style={{
                   background: AMBER_FILL,
                 }}
@@ -1150,7 +1153,7 @@ export default function Support() {
               href="https://wa.me/910000000000"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center justify-center h-14 px-8 text-[#151417] text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300"
+              className="inline-flex items-center justify-center h-14 px-8 text-charcoal text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300"
               style={{
                 background: AMBER_FILL,
               }}

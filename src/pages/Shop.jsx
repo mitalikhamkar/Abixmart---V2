@@ -4,7 +4,7 @@ import { Search } from 'lucide-react';
 import PageTransition from '@/components/abix/PageTransition';
 import ProductCard from '@/components/abix/ProductCard';
 import ShopQuickView from '@/components/abix/ShopQuickView';
-import ComingSoonMiniCard from '@/components/abix/ComingSoonMiniCard';
+import ComingSoonMarquee from '@/components/abix/ComingSoonMarquee';
 import BrandStrip from '@/components/abix/BrandStrip';
 import { products } from '@/data/products';
 import { useAuth } from '@/lib/AuthContext';
@@ -50,8 +50,7 @@ export default function Shop() {
   }, [query]);
 
   const availableFiltered = filtered.filter((p) => p.status === 'available');
-  const comingSoonFiltered = filtered.filter((p) => p.status === 'coming_soon');
-  const noResults = filtered.length === 0;
+  const noResults = query.trim() !== '' && availableFiltered.length === 0;
 
   return (
     <PageTransition>
@@ -71,17 +70,18 @@ export default function Shop() {
       )}
 
       <section className="relative pt-24 lg:pt-28 pb-16 lg:pb-24 overflow-hidden" style={{ backgroundColor: ABIX.obsidian }}>
-        {/* CHANGED: intro simplified to one short line instead of an
-            eyebrow + heading + paragraph block — this is just the shop's
-            label, not a landing section. */}
-        <div className="relative z-10 mx-auto max-w-6xl px-6 lg:px-10 text-center sm:text-left">
-          <h1 className="font-display text-xl sm:text-2xl tracking-tight" style={{ color: ABIX.ivory }}>
-            Shop ABIXMART
+        <div className="relative z-10 mx-auto max-w-2xl px-6 lg:px-10 text-center">
+          <span className="inline-flex items-center gap-3 text-[10px] font-semibold uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>
+            <span className="h-px w-6" style={{ backgroundColor: ABIX.gold }} />
+            The Collection
+            <span className="h-px w-6" style={{ backgroundColor: ABIX.gold }} />
+          </span>
+          <h1 className="mt-4 font-display text-3xl sm:text-4xl leading-tight tracking-tight" style={{ color: ABIX.ivory }}>
+            Shop <span className="italic" style={{ color: ABIX.gold }}>ABIXMART</span>
           </h1>
         </div>
 
-        {/* Search — unchanged, left exactly as it was */}
-        <div className="relative z-10 mx-auto max-w-6xl px-6 lg:px-10 mt-6 flex justify-center sm:justify-start">
+        <div className="relative z-10 mx-auto max-w-6xl px-6 lg:px-10 mt-8 flex justify-center">
           <div className="relative w-full sm:max-w-xs">
             <Search size={16} className="absolute left-0 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: ABIX.ivory45 }} />
             <input
@@ -95,12 +95,6 @@ export default function Shop() {
           </div>
         </div>
 
-        {/* CHANGED: grid no longer special-cases a single product with
-            max-w + mx-auto centering — that's what was placing Shilajit
-            in the middle of the page. It's now a plain left-to-right,
-            row-based grid at every count: 1 product sits at the start
-            of row 1; a 2nd product will sit beside it in the same row;
-            a 4th will start row 2 at the left, and so on automatically. */}
         <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10 mt-12 lg:mt-16">
           {availableFiltered.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
@@ -118,26 +112,24 @@ export default function Shop() {
         </div>
       </section>
 
-      {comingSoonFiltered.length > 0 && (
-        <section
-          className="relative py-14 lg:py-20 overflow-hidden grain"
-          style={{ background: `linear-gradient(180deg, ${ABIX.obsidian} 0%, ${ABIX.espresso} 100%)` }}
-        >
-          <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10">
-            <div className="mb-8 lg:mb-10">
-              <span className="text-[11px] font-semibold uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>Coming Soon</span>
-              <h2 className="mt-2 font-display text-2xl sm:text-3xl leading-tight tracking-tight" style={{ color: ABIX.ivory }}>
-                What's next.
-              </h2>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6">
-              {comingSoonFiltered.map((p) => (
-                <ComingSoonMiniCard key={p.id} product={p} />
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
+      {/* CHANGED: static ComingSoonMiniCard grid replaced with the
+          shared ComingSoonMarquee — a continuous reel driven directly
+          off products.js, matching Home and About. Note this is no
+          longer filtered by the search box above; the marquee always
+          shows the full coming-soon set per the brief's data-driven,
+          single-source-of-truth requirement. */}
+      <section
+        className="relative py-14 lg:py-20 overflow-hidden grain"
+        style={{ background: `linear-gradient(180deg, ${ABIX.obsidian} 0%, ${ABIX.espresso} 100%)` }}
+      >
+        <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10 mb-8 lg:mb-10">
+          <span className="text-[11px] font-semibold uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>Coming Soon</span>
+          <h2 className="mt-2 font-display text-2xl sm:text-3xl leading-tight tracking-tight" style={{ color: ABIX.ivory }}>
+            What's next.
+          </h2>
+        </div>
+        <ComingSoonMarquee />
+      </section>
 
       <BrandStrip />
 

@@ -8,18 +8,21 @@ import Eyebrow from '@/components/abix/Eyebrow';
 import ShopCollectionCard from '@/components/abix/ShopCollectionCard';
 import { getProductBySlug, products, openProductTabs, ritualBundles } from '@/data/products';
 import { useShop } from '@/lib/ShopContext';
+import { ABIX } from '@/components/abix/brandColors';
 
 import collectionImg from '@/assets/shilajit-steps/collection.png';
 import purificationImg from '@/assets/shilajit-steps/purification.png';
 import testingImg from '@/assets/shilajit-steps/testing.png';
 import readyImg from '@/assets/shilajit-steps/ReadyToReach.jpeg';
 
-const INK = '#151417';
-const GRAPHITE = '#1E1C1F';
-const IVORY = '#F2ECE2';
-const MUTED = '#A79C8D';
-const AMBER = '#D3A467';
-const AMBER_FILL = '#BE8A4B';
+// CHANGED: these now alias the centralized ABIX token system instead of
+// hardcoded hex — every usage further down the file is untouched.
+const INK = ABIX.obsidian;
+const GRAPHITE = ABIX.espresso;
+const IVORY = ABIX.ivory;
+const MUTED = ABIX.ivory45;
+const AMBER = ABIX.goldLight;
+const AMBER_FILL = ABIX.gold;
 
 const TAB_IMAGES = {
   source: collectionImg,
@@ -336,7 +339,7 @@ export default function ProductDetail() {
       </section>
 
       {related.length > 0 && (
-        <section className="py-16 lg:py-24 border-t" style={{ background: '#1E1C1F', borderColor: `${IVORY}0D` }}>
+        <section className="py-16 lg:py-24 border-t" style={{ background: GRAPHITE, borderColor: `${IVORY}0D` }}>
           <div className="mx-auto max-w-7xl px-6 lg:px-10">
             <div className="max-w-2xl mb-10 lg:mb-14">
               <Eyebrow light>More From The Collection</Eyebrow>
