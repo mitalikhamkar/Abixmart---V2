@@ -2,27 +2,24 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Eye, ShoppingBag } from 'lucide-react';
+import { Eye, ShoppingBag, Heart } from 'lucide-react';
 import { useShop } from '@/lib/ShopContext';
 import { ABIX } from './brandColors';
 
-// CHANGED: removed the max-w-sm/mx-auto centering that used to live on
-// this card — alignment for a single vs. multiple products is now
-// handled entirely by the grid in Shop.jsx, so the card itself always
-// renders at a natural width and sits wherever the grid places it
-// (top-left first, filling left-to-right/row-wise as more are added).
-//
-// CHANGED (price/category row): category (small, gold, uppercase label)
-// is now on the LEFT and price (larger, ivory, bold) is on the RIGHT —
-// price reads as the dominant value on the card instead of competing
-// with the label for the same weight.
 export default function ProductCard({ product, onQuickView }) {
-  const { addToCart } = useShop();
+  const { addToCart, toggleWishlist, isInWishlist } = useShop();
+  const wishlisted = isInWishlist(product.id);
 
   const handleQuickAdd = (e) => {
     e.preventDefault();
     e.stopPropagation();
     addToCart(product.id, 1);
+  };
+
+  const handleWishlist = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleWishlist(product.id);
   };
 
   return (
@@ -46,6 +43,17 @@ export default function ProductCard({ product, onQuickView }) {
         >
           Available
         </span>
+
+        {/* NEW: wishlist heart, top-right, visible without opening
+            Quick View or Product Detail. */}
+        <button
+          onClick={handleWishlist}
+          aria-label={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+          className="absolute top-4 right-4 z-10 h-8 w-8 inline-flex items-center justify-center rounded-full transition-colors"
+          style={{ backgroundColor: `${ABIX.obsidian}CC`, color: wishlisted ? ABIX.gold : ABIX.ivory }}
+        >
+          <Heart size={14} className={wishlisted ? 'fill-current' : ''} />
+        </button>
 
         {product.shopImage && (
           <img
@@ -86,11 +94,11 @@ export default function ProductCard({ product, onQuickView }) {
         <h3 className="font-display text-lg leading-tight" style={{ color: ABIX.ivory }}>{product.name}</h3>
         <p className="mt-1 text-xs leading-relaxed line-clamp-2" style={{ color: ABIX.ivory45 }}>{product.shortDesc}</p>
         <div className="mt-3 flex items-center justify-between">
+          <span className="font-price text-lg" style={{ color: ABIX.ivory }}>
+            From {product.currency}{product.price}
+          </span>
           <span className="text-[9px] font-semibold uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>
             {product.category}
-          </span>
-          <span className="font-price text-xl font-semibold" style={{ color: ABIX.ivory }}>
-            {product.currency}{product.price}
           </span>
         </div>
 

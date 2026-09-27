@@ -2,8 +2,9 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Bell, Check, X } from 'lucide-react';
+import { Bell, Check, X, Heart } from 'lucide-react';
 import { useProductNotify } from '@/hooks/useProductNotify';
+import { useShop } from '@/lib/ShopContext';
 
 const PENDING_NOTIFY_KEY = 'abixmart_pending_notify';
 
@@ -11,6 +12,7 @@ export default function ShopCollectionCard({ product, index = 0 }) {
   const navigate = useNavigate();
   const isAvailable = product.status === 'available';
   const { status, subscribe, isLoggedIn } = useProductNotify(product.id, product.name);
+  const { toggleWishlist, isInWishlist } = useShop();
   const [dismissed, setDismissed] = React.useState(false);
 
   const handleNotifyClick = () => {
@@ -24,6 +26,7 @@ export default function ShopCollectionCard({ product, index = 0 }) {
 
   const showConfirmation = status === 'subscribed' && !dismissed;
   const showAlready = status === 'already-subscribed';
+  const wishlisted = isInWishlist(product.id);
 
   return (
     <motion.div
@@ -51,15 +54,31 @@ export default function ShopCollectionCard({ product, index = 0 }) {
         <span className="absolute top-4 left-4 font-grotesk text-[10px] uppercase tracking-luxe-sm text-[#F2ECE2] bg-[#151417]/80 backdrop-blur px-2.5 py-1">
           {String(index + 1).padStart(2, '0')}
         </span>
+
+        {/* NEW: wishlist heart — top-right, stopPropagation so it
+            never triggers the card's own link navigation. */}
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleWishlist(product.id);
+          }}
+          aria-label={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+          className="absolute top-4 right-4 h-8 w-8 inline-flex items-center justify-center rounded-full backdrop-blur transition-colors"
+          style={{ backgroundColor: 'rgba(21,20,23,0.7)', color: wishlisted ? '#D3A467' : '#F2ECE2' }}
+        >
+          <Heart size={14} className={wishlisted ? 'fill-current' : ''} />
+        </button>
+
         <span
-          className={`absolute top-4 right-4 label-meta px-2.5 py-1 backdrop-blur ${
+          className={`absolute bottom-4 left-4 label-meta px-2.5 py-1 backdrop-blur ${
             isAvailable ? 'bg-[#BE8A4B] text-[#151417]' : 'bg-[#151417]/70 text-[#C9C0B4] border border-[#F2ECE2]/10'
           }`}
         >
           {isAvailable ? 'Available' : 'Coming Soon'}
         </span>
         {!isAvailable && (
-          <span className="absolute bottom-3 left-4 text-[10px] text-[#D8CFC2]/70 tracking-wide">Conceptual visual</span>
+          <span className="absolute bottom-3 right-4 text-[10px] text-[#D8CFC2]/70 tracking-wide">Conceptual visual</span>
         )}
       </div>
 

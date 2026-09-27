@@ -92,12 +92,14 @@ export default function CheckoutModal() {
     setSubmitting(true);
     setOrderError('');
 
-    const items = cartItems.map(({ id, qty, product }) => ({
+        const items = cartItems.map(({ id, variantId, variantLabel, qty, unitPrice, subtotal, product }) => ({
       productId: id,
+      variantId: variantId || null,
+      variantLabel: variantLabel || null,
       name: product.name,
       qty,
-      unitPrice: product.price,
-      subtotal: product.price * qty,
+      unitPrice,
+      subtotal,
     }));
 
     try {
@@ -222,12 +224,12 @@ export default function CheckoutModal() {
                   exit={{ opacity: 0, x: -24 }}
                   transition={{ duration: 0.3 }}
                 >
-                  {step === 0 && (
+                                    {step === 0 && (
                     <div>
                       <h3 className="font-display text-2xl text-greendark">Your items</h3>
                       <div className="mt-5 space-y-3">
-                        {cartItems.map(({ id, qty, product }) => (
-                          <div key={id} className="flex items-center gap-4 p-4 bg-sand">
+                        {cartItems.map(({ id, variantId, variantLabel, qty, product, subtotal }) => (
+                          <div key={`${id}:${variantId || ''}`} className="flex items-center gap-4 p-4 bg-sand">
                             <div className="h-14 w-14 shrink-0 bg-greendark/10 overflow-hidden flex items-center justify-center">
                               {product.image ? (
                                 <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
@@ -237,9 +239,9 @@ export default function CheckoutModal() {
                             </div>
                             <div className="flex-1">
                               <p className="font-display text-lg text-greendark leading-tight">{product.name}</p>
-                              <p className="text-sm text-foreground/55">Qty {qty}</p>
+                              <p className="text-sm text-foreground/55">{variantLabel ? `${variantLabel} · ` : ''}Qty {qty}</p>
                             </div>
-                            <span className="font-price text-lg text-greendark">{product.currency}{product.price * qty}</span>
+                            <span className="font-price text-lg text-greendark">{product.currency}{subtotal}</span>
                           </div>
                         ))}
                       </div>

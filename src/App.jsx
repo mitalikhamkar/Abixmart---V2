@@ -1,4 +1,3 @@
-// src/App.jsx — add the import and one route line inside the existing SiteLayout block
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
@@ -16,6 +15,8 @@ import CreateAccount from '@/pages/CreateAccount';
 import ForgotPassword from '@/pages/ForgotPassword';
 import Account from '@/pages/Account';
 import AuthAction from '@/pages/AuthAction';
+import Cart from '@/pages/Cart';
+import Wishlist from '@/pages/Wishlist';
 import SiteLayout from '@/components/abix/SiteLayout';
 import { ShopProvider } from '@/lib/ShopContext';
 import { AuthProvider } from '@/lib/AuthContext';
@@ -56,6 +57,8 @@ function App() {
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/account" element={<Account />} />
                 <Route path="/auth/action" element={<AuthAction />} />
+                <Route path="/cart" element={<Cart />} />
+                <Route path="/wishlist" element={<Wishlist />} />
               </Route>
 
               <Route element={<AdminAuthProvider><Outlet /></AdminAuthProvider>}>

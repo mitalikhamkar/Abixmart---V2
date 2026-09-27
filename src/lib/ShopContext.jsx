@@ -6,13 +6,27 @@ import { products } from '@/data/products';
 
 const ShopContext = createContext(null);
 
+// A cart line is now uniquely identified by product id + variant id
+// (null variant = "the plain product"), so a 1-Jar and a 2-Jar Ritual
+// of the same product are correctly two separate lines instead of one
+// line whose price would otherwise be recomputed as product.price×qty.
+function cartKey(item) {
+  return `${item.id}:${item.variantId || ''}`;
+}
+
 function mergeCartItems(localItems, remoteItems) {
-  const qtyById = new Map();
-  localItems.forEach((item) => qtyById.set(item.id, item.qty));
-  remoteItems.forEach((item) => {
-    qtyById.set(item.id, (qtyById.get(item.id) || 0) + item.qty);
-  });
-  return Array.from(qtyById.entries()).map(([id, qty]) => ({ id, qty }));
+  const map = new Map();
+  const upsert = (item) => {
+    const key = cartKey(item);
+    if (map.has(key)) {
+      map.set(key, { ...map.get(key), qty: map.get(key).qty + item.qty });
+    } else {
+      map.set(key, { ...item });
+    }
+  };
+  localItems.forEach(upsert);
+  remoteItems.forEach(upsert);
+  return Array.from(map.values());
 }
 
 function mergeWishlistIds(localIds, remoteIds) {
@@ -22,7 +36,7 @@ function mergeWishlistIds(localIds, remoteIds) {
 export function ShopProvider({ children }) {
   const { user, loading: authLoading } = useAuth();
 
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState([]); // [{ id, qty, variantId, variantLabel, unitPrice }]
   const [wishlist, setWishlist] = useState([]);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutPrefill, setCheckoutPrefill] = useState(null);
@@ -36,29 +50,43 @@ export function ShopProvider({ children }) {
 
   const productById = useCallback((id) => products.find((p) => p.id === id), []);
 
-  const addToCart = useCallback((id, qty = 1) => {
+  // CHANGED — Phase 3: addToCart now optionally accepts a variant
+  // ({ id, label, price }, e.g. one of ritualBundles). Existing calls
+  // like addToCart(id, 1) are unaffected — variant defaults to null,
+  // so unitPrice stays undefined and cartItems falls back to
+  // product.price, exactly as before.
+  const addToCart = useCallback((id, qty = 1, variant = null) => {
     setCart((prev) => {
-      const existing = prev.find((c) => c.id === id);
-      if (existing) return prev.map((c) => (c.id === id ? { ...c, qty: c.qty + qty } : c));
-      return [...prev, { id, qty }];
+      const variantId = variant?.id ?? null;
+      const key = `${id}:${variantId || ''}`;
+      const existingIndex = prev.findIndex((c) => cartKey(c) === key);
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex] = { ...updated[existingIndex], qty: updated[existingIndex].qty + qty };
+        return updated;
+      }
+      return [
+        ...prev,
+        { id, qty, variantId, variantLabel: variant?.label ?? null, unitPrice: variant?.price ?? null },
+      ];
     });
     setCartOpen(true);
   }, []);
 
-  const removeFromCart = useCallback((id) => {
-    setCart((prev) => prev.filter((c) => c.id !== id));
+  // CHANGED: now takes an optional variantId so a specific package line
+  // can be removed. Old calls (just an id) still work — they only
+  // remove the no-variant line for that product, same as before.
+  const removeFromCart = useCallback((id, variantId = null) => {
+    setCart((prev) => prev.filter((c) => !(c.id === id && (c.variantId || null) === (variantId || null))));
   }, []);
 
-  const updateQty = useCallback((id, qty) => {
-    if (qty < 1) return removeFromCart(id);
-    setCart((prev) => prev.map((c) => (c.id === id ? { ...c, qty } : c)));
+  const updateQty = useCallback((id, qty, variantId = null) => {
+    if (qty < 1) return removeFromCart(id, variantId);
+    setCart((prev) =>
+      prev.map((c) => ((c.id === id && (c.variantId || null) === (variantId || null)) ? { ...c, qty } : c))
+    );
   }, [removeFromCart]);
 
-  // NEW — Phase 2: clears the cart locally. For an authenticated,
-  // already-hydrated user this alone is sufficient: the existing
-  // "save on change" effect below fires whenever `cart` changes and
-  // writes { items: [], updatedAt } to carts/{uid} automatically —
-  // no separate Firestore call needed here.
   const clearCart = useCallback(() => {
     setCart([]);
   }, []);
@@ -199,15 +227,26 @@ export function ShopProvider({ children }) {
     })();
   }, [wishlist, user]);
 
-  const cartCount = useMemo(() => cart.reduce((n, c) => n + c.qty, 0), [cart]);
-  const cartTotal = useMemo(
-    () => cart.reduce((sum, c) => sum + (productById(c.id)?.price || 0) * c.qty, 0),
-    [cart, productById]
-  );
+  // CHANGED — Phase 3: each cart item now carries its own resolved
+  // unitPrice (variant price if set, else product.price) and subtotal
+  // (unitPrice × qty). cartTotal sums those subtotals rather than
+  // recomputing product.price × qty, which is what fixed the
+  // "2 Jar Ritual priced at product.price×2" bug.
   const cartItems = useMemo(
-    () => cart.map((c) => ({ ...c, product: productById(c.id) })).filter((c) => c.product),
+    () =>
+      cart
+        .map((c) => {
+          const product = productById(c.id);
+          if (!product) return null;
+          const unitPrice = c.unitPrice ?? product.price ?? 0;
+          return { ...c, product, unitPrice, subtotal: unitPrice * c.qty };
+        })
+        .filter(Boolean),
     [cart, productById]
   );
+
+  const cartCount = useMemo(() => cart.reduce((n, c) => n + c.qty, 0), [cart]);
+  const cartTotal = useMemo(() => cartItems.reduce((sum, c) => sum + c.subtotal, 0), [cartItems]);
 
   const value = {
     cart, cartItems, cartCount, cartTotal,

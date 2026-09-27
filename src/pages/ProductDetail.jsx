@@ -1,8 +1,7 @@
-// src/pages/ProductDetail.jsx — only the info column changed, rest identical to before
 import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Minus, Plus, ArrowLeft, Heart, Send, Check, BookOpen } from 'lucide-react';
+import { Minus, Plus, ArrowLeft, Heart, ShoppingBag, Check, BookOpen } from 'lucide-react';
 import PageTransition from '@/components/abix/PageTransition';
 import Eyebrow from '@/components/abix/Eyebrow';
 import ShopCollectionCard from '@/components/abix/ShopCollectionCard';
@@ -15,8 +14,6 @@ import purificationImg from '@/assets/shilajit-steps/purification.png';
 import testingImg from '@/assets/shilajit-steps/testing.png';
 import readyImg from '@/assets/shilajit-steps/ReadyToReach.jpeg';
 
-// CHANGED: these now alias the centralized ABIX token system instead of
-// hardcoded hex — every usage further down the file is untouched.
 const INK = ABIX.obsidian;
 const GRAPHITE = ABIX.espresso;
 const IVORY = ABIX.ivory;
@@ -35,21 +32,23 @@ export default function ProductDetail() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const product = getProductBySlug(slug);
-  const { toggleWishlist, isInWishlist } = useShop();
-  const [qty, setQty] = useState(1);
+  const { addToCart, toggleWishlist, isInWishlist } = useShop();
+
+  // CHANGED — Phase 3: replaces the old single `qty` state that was
+  // being used both as "which ritual is selected" (jars) and as a
+  // free +/- stepper on the same number — that conflation is exactly
+  // what caused product.price × qty to silently override the correct
+  // ritual price. Now there are two independent, clearly-named states.
+  const [selectedVariant, setSelectedVariant] = useState(ritualBundles[0]);
+  const [packQty, setPackQty] = useState(1);
   const [tab, setTab] = useState('source');
 
   if (!product || product.status === 'coming_soon') {
     return (
       <PageTransition>
-        <section
-          className="min-h-[70vh] flex items-center justify-center text-center px-6"
-          style={{ background: INK }}
-        >
+        <section className="min-h-[70vh] flex items-center justify-center text-center px-6" style={{ background: INK }}>
           <div>
-            <p className="font-display text-3xl" style={{ color: IVORY }}>
-              This product isn't available yet.
-            </p>
+            <p className="font-display text-3xl" style={{ color: IVORY }}>This product isn't available yet.</p>
             <Link
               to="/shop"
               className="mt-6 inline-flex items-center justify-center h-12 px-7 text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300"
@@ -66,33 +65,42 @@ export default function ProductDetail() {
   const activeTab = openProductTabs.find((t) => t.key === tab);
   const related = products.filter((p) => p.id !== product.id);
 
+  const handleAddToCart = () => {
+    addToCart(product.id, packQty, {
+      id: selectedVariant.id,
+      label: selectedVariant.name,
+      price: selectedVariant.price,
+    });
+  };
+
   const handleSendInquiry = () => {
-    navigate(`/support?product=${product.slug}&quantity=${qty}#inquiry`);
+    navigate(`/support?product=${product.slug}&quantity=${selectedVariant.jars}#inquiry`);
   };
 
   return (
     <PageTransition>
-      <section className="relative pt-24 lg:pt-32 pb-16 lg:pb-24 overflow-hidden" style={{ background: INK }}>
+      {/* CHANGED: top padding tightened (pt-16 lg:pt-20, was pt-24
+          lg:pt-32) and the image is now capped to a smaller, contained
+          frame instead of a near-full-bleed aspect-[4/5] column — this
+          is what gets purchase controls into the first viewport
+          instead of forcing a long scroll first. */}
+      <section className="relative pt-16 lg:pt-20 pb-16 lg:pb-24 overflow-hidden" style={{ background: INK }}>
         <div className="absolute inset-0 grain opacity-[0.04] pointer-events-none" />
 
         <div className="relative mx-auto max-w-7xl px-6 lg:px-10">
-          <Link
-            to="/shop"
-            className="inline-flex items-center gap-2 text-sm transition-colors mb-8"
-            style={{ color: MUTED }}
-          >
+          <Link to="/shop" className="inline-flex items-center gap-2 text-sm transition-colors mb-6" style={{ color: MUTED }}>
             <ArrowLeft size={16} /> Back to shop
           </Link>
 
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+          <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-start">
             <motion.div
               initial={{ opacity: 0, scale: 0.97 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-              className="relative"
+              className="relative max-w-sm mx-auto lg:mx-0 lg:sticky lg:top-24"
             >
               <div
-                className="relative aspect-[4/5] overflow-hidden group"
+                className="relative aspect-square overflow-hidden group rounded-2xl"
                 style={{ background: `linear-gradient(160deg, ${GRAPHITE} 0%, ${INK} 100%)` }}
               >
                 <div
@@ -103,87 +111,111 @@ export default function ProductDetail() {
                   <img
                     src={product.shopImage}
                     alt={product.name}
-                    className="h-full w-full object-cover transition-transform duration-[1200ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.035]"
+                    className="h-full w-full object-contain p-6 transition-transform duration-[1200ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.035]"
                   />
                 )}
-                {['top-4 left-4 border-t border-l', 'top-4 right-4 border-t border-r', 'bottom-4 left-4 border-b border-l', 'bottom-4 right-4 border-b border-r'].map(
-                  (pos) => (
-                    <span
-                      key={pos}
-                      className={`absolute ${pos} w-5 h-5 pointer-events-none`}
-                      style={{ borderColor: `${AMBER}50` }}
-                    />
-                  )
-                )}
+                {['top-4 left-4 border-t border-l', 'top-4 right-4 border-t border-r', 'bottom-4 left-4 border-b border-l', 'bottom-4 right-4 border-b border-r'].map((pos) => (
+                  <span key={pos} className={`absolute ${pos} w-5 h-5 pointer-events-none`} style={{ borderColor: `${AMBER}50` }} />
+                ))}
                 <span
                   className="absolute top-4 left-1/2 -translate-x-1/2 label-meta px-2.5 py-1"
                   style={{ background: `${INK}B3`, color: AMBER }}
                 >
                   Available
                 </span>
+
+                {/* NEW: wishlist heart directly on the Product Detail
+                    image too, same behavior as the Shop grid cards. */}
+                <button
+                  onClick={() => toggleWishlist(product.id)}
+                  aria-label={isInWishlist(product.id) ? 'Remove from wishlist' : 'Add to wishlist'}
+                  className="absolute top-4 right-4 h-9 w-9 inline-flex items-center justify-center rounded-full backdrop-blur-md transition-colors"
+                  style={{ backgroundColor: `${INK}B3`, color: isInWishlist(product.id) ? AMBER : IVORY }}
+                >
+                  <Heart size={16} className={isInWishlist(product.id) ? 'fill-current' : ''} />
+                </button>
               </div>
             </motion.div>
 
             <div>
               <Eyebrow light>Signature Ritual</Eyebrow>
-              <h1
-                className="mt-5 font-display text-4xl sm:text-5xl lg:text-[56px] leading-[1.02] tracking-tight"
-                style={{ color: IVORY }}
-              >
+              <h1 className="mt-3 font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.02] tracking-tight" style={{ color: IVORY }}>
                 {product.name}
               </h1>
-              <p className="mt-2 font-display text-2xl lg:text-3xl italic" style={{ color: AMBER }}>
+              <p className="mt-1.5 font-display text-xl lg:text-2xl italic" style={{ color: AMBER }}>
                 {product.subtitle}
               </p>
-              <p className="mt-7 text-lg leading-relaxed max-w-md" style={{ color: `${IVORY}B3` }}>
+              <p className="mt-4 text-base leading-relaxed max-w-md" style={{ color: `${IVORY}B3` }}>
                 {product.description}
               </p>
 
-              <dl className="mt-9 grid grid-cols-2 gap-x-8 gap-y-5 max-w-md">
+              <dl className="mt-6 grid grid-cols-2 gap-x-8 gap-y-3 max-w-md">
                 {product.facts.map((f) => (
-                  <div key={f.label} className="border-t pt-3" style={{ borderColor: `${IVORY}1A` }}>
+                  <div key={f.label} className="border-t pt-2.5" style={{ borderColor: `${IVORY}1A` }}>
                     <dt className="label-meta" style={{ color: MUTED }}>{f.label}</dt>
-                    <dd className="mt-1 font-display text-lg" style={{ color: IVORY }}>{f.value}</dd>
+                    <dd className="mt-0.5 font-display text-base" style={{ color: IVORY }}>{f.value}</dd>
                   </div>
                 ))}
               </dl>
 
-              <div className="mt-9">
-                <span className="label-meta" style={{ color: MUTED }}>Quantity guide</span>
+              {/* Ritual selector — CHANGED: now sets selectedVariant
+                  (the actual priced package), not the shared qty state.
+                  Selected price/original/savings all read directly from
+                  selectedVariant, so they update immediately and stay
+                  correct for whichever ritual is chosen. */}
+              <div className="mt-7">
+                <span className="label-meta" style={{ color: MUTED }}>Choose your ritual</span>
                 <div className="mt-3 space-y-2">
-                  {ritualBundles.map((b) => (
-                    <button
-                      key={b.name}
-                      onClick={() => setQty(b.jars)}
-                      className="w-full flex items-center justify-between p-4 border transition-colors"
-                      style={{
-                        borderColor: qty === b.jars ? AMBER : `${IVORY}1F`,
-                        background: qty === b.jars ? `${AMBER}0F` : 'transparent',
-                      }}
-                    >
-                      <span className="text-left">
-                        <span className="font-display text-lg" style={{ color: IVORY }}>{b.name}</span>
-                        <span className="block text-xs" style={{ color: MUTED }}>{b.note}</span>
-                      </span>
-                      <span className="font-price text-xl" style={{ color: IVORY }}>₹{b.price}</span>
-                    </button>
-                  ))}
+                  {ritualBundles.map((b) => {
+                    const active = selectedVariant.id === b.id;
+                    return (
+                      <button
+                        key={b.id}
+                        onClick={() => setSelectedVariant(b)}
+                        className="w-full flex items-center justify-between p-4 border transition-colors rounded-lg"
+                        style={{
+                          borderColor: active ? AMBER : `${IVORY}1F`,
+                          background: active ? `${AMBER}0F` : 'transparent',
+                        }}
+                      >
+                        <span className="text-left">
+                          <span className="font-display text-lg" style={{ color: IVORY }}>{b.name}</span>
+                          <span className="block text-xs" style={{ color: MUTED }}>{b.note}</span>
+                        </span>
+                        <span className="text-right">
+                          <span className="font-price text-xl" style={{ color: IVORY }}>₹{b.price}</span>
+                          <span className="block text-xs line-through" style={{ color: MUTED }}>₹{b.originalPrice}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div className="mt-8 flex items-center gap-5">
-                <div className="inline-flex items-center border h-14" style={{ borderColor: `${IVORY}30` }}>
+              {/* Selected price summary — reads only from
+                  selectedVariant, so it can never disagree with the
+                  ritual buttons above. */}
+              <div className="mt-6 flex items-baseline gap-3">
+                <span className="font-price text-3xl" style={{ color: IVORY }}>₹{selectedVariant.price}</span>
+                <span className="text-lg line-through" style={{ color: MUTED }}>₹{selectedVariant.originalPrice}</span>
+                <span className="text-sm font-semibold" style={{ color: AMBER }}>{selectedVariant.note}</span>
+              </div>
+
+              {/* Pack quantity — how many of the selected package, not
+                  the ritual selector itself. Defaults to 1. */}
+              <div className="mt-5 flex items-center gap-5">
+                <div className="inline-flex items-center border h-14 rounded-lg" style={{ borderColor: `${IVORY}30` }}>
                   <button
-                    onClick={() => setQty((q) => Math.max(1, q - 1))}
+                    onClick={() => setPackQty((q) => Math.max(1, q - 1))}
                     className="h-full w-12 inline-flex items-center justify-center transition-colors"
                     style={{ color: IVORY }}
                     aria-label="Decrease quantity"
                   >
                     <Minus size={16} />
                   </button>
-                  <span className="w-10 text-center font-price text-xl" style={{ color: IVORY }}>{qty}</span>
+                  <span className="w-10 text-center font-price text-xl" style={{ color: IVORY }}>{packQty}</span>
                   <button
-                    onClick={() => setQty((q) => q + 1)}
+                    onClick={() => setPackQty((q) => q + 1)}
                     className="h-full w-12 inline-flex items-center justify-center transition-colors"
                     style={{ color: IVORY }}
                     aria-label="Increase quantity"
@@ -191,58 +223,48 @@ export default function ProductDetail() {
                     <Plus size={16} />
                   </button>
                 </div>
-                <span className="font-price text-3xl" style={{ color: IVORY }}>
-                  {product.currency}{product.price * qty}
+                <span className="font-price text-2xl" style={{ color: IVORY }}>
+                  Subtotal: ₹{selectedVariant.price * packQty}
                 </span>
-                <button
-                  onClick={() => toggleWishlist(product.id)}
-                  className="ml-auto h-14 w-14 inline-flex items-center justify-center border transition-colors"
-                  style={{ borderColor: `${IVORY}20`, color: isInWishlist(product.id) ? AMBER : IVORY }}
-                  aria-label="Wishlist"
-                >
-                  <Heart size={20} className={isInWishlist(product.id) ? 'fill-current' : ''} />
-                </button>
               </div>
 
-              <div className="mt-6">
+              {/* CHANGED: primary action is now Add to Cart, replacing
+                  the old "Send Product Inquiry" button in this spot. */}
+              <div className="mt-7">
                 <button
-                  onClick={handleSendInquiry}
-                  className="group inline-flex items-center justify-center gap-3 h-14 px-8 text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300"
+                  onClick={handleAddToCart}
+                  className="group w-full sm:w-auto inline-flex items-center justify-center gap-3 h-14 px-9 text-[12px] font-semibold tracking-luxe-sm uppercase rounded-full transition-colors duration-300"
                   style={{ background: AMBER_FILL, color: INK }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = AMBER; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = AMBER_FILL; }}
                 >
-                  <Send size={16} />
-                  Send Product Inquiry
+                  <ShoppingBag size={16} />
+                  Add to Cart
                 </button>
-                <p className="mt-2.5 text-xs" style={{ color: MUTED }}>
-                  We'll follow up on availability and next steps directly.
-                </p>
               </div>
 
-              {/* NEW: real button (not a text link), sitting right next
-                  to the inquiry CTA. Navigates with no ?age/?gender —
-                  the dedicated page asks that itself. */}
-              <div className="mt-4">
+              <div className="mt-4 flex flex-col sm:flex-row gap-3">
                 <Link
                   to="/how-to-take-shilajit"
-                  className="inline-flex items-center justify-center gap-2 h-14 px-8 text-[12px] font-semibold tracking-luxe-sm uppercase border transition-colors duration-300 w-full sm:w-auto"
+                  className="inline-flex items-center justify-center gap-2 h-12 px-6 text-[11px] font-semibold tracking-luxe-sm uppercase border rounded-full transition-colors duration-300"
                   style={{ borderColor: `${AMBER}60`, color: AMBER, background: 'transparent' }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = `${AMBER}14`;
-                    e.currentTarget.style.borderColor = AMBER;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.borderColor = `${AMBER}60`;
-                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = `${AMBER}14`; e.currentTarget.style.borderColor = AMBER; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = `${AMBER}60`; }}
                 >
-                  <BookOpen size={16} />
-                  Let's See How To Take Shilajit
+                  <BookOpen size={15} />
+                  How To Take Shilajit
                 </Link>
+
+                {/* CHANGED: Send Inquiry demoted to a plain text link,
+                    kept for anyone who still wants to ask a question
+                    before buying — no longer competing with Add to
+                    Cart for primary-action attention. */}
+                <button onClick={handleSendInquiry} className="text-sm underline underline-offset-4 transition-colors" style={{ color: MUTED }}>
+                  Or send a product inquiry
+                </button>
               </div>
 
-              <ul className="mt-8 space-y-2.5">
+              <ul className="mt-7 space-y-2.5">
                 {product.howToUse.map((h) => (
                   <li key={h} className="flex gap-3 text-sm leading-relaxed" style={{ color: `${IVORY}CC` }}>
                     <Check size={15} className="mt-0.5 shrink-0" style={{ color: AMBER }} />
@@ -259,10 +281,7 @@ export default function ProductDetail() {
         <div className="mx-auto max-w-7xl px-6 lg:px-10">
           <div className="max-w-2xl mb-10">
             <Eyebrow light>The Product Story</Eyebrow>
-            <h2
-              className="mt-5 font-display text-4xl sm:text-5xl leading-[1.02] tracking-tight"
-              style={{ color: IVORY }}
-            >
+            <h2 className="mt-5 font-display text-4xl sm:text-5xl leading-[1.02] tracking-tight" style={{ color: IVORY }}>
               Origin. Process. Quality. Use.
             </h2>
           </div>
@@ -282,11 +301,7 @@ export default function ProductDetail() {
                       <span className="font-display text-3xl lg:text-4xl leading-tight">{t.label}</span>
                       <span
                         className="text-2xl transition-transform duration-300"
-                        style={{
-                          color: on ? AMBER : MUTED,
-                          opacity: on ? 1 : 0,
-                          transform: on ? 'translateX(4px)' : 'translateX(0)',
-                        }}
+                        style={{ color: on ? AMBER : MUTED, opacity: on ? 1 : 0, transform: on ? 'translateX(4px)' : 'translateX(0)' }}
                       >
                         →
                       </span>
@@ -310,10 +325,7 @@ export default function ProductDetail() {
                     className="absolute inset-0 h-full w-full object-cover"
                   />
                 </AnimatePresence>
-                <div
-                  className="absolute inset-0"
-                  style={{ background: `linear-gradient(0deg, ${INK} 10%, ${INK}B3 55%, ${INK}66 100%)` }}
-                />
+                <div className="absolute inset-0" style={{ background: `linear-gradient(0deg, ${INK} 10%, ${INK}B3 55%, ${INK}66 100%)` }} />
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={tab}
@@ -324,12 +336,8 @@ export default function ProductDetail() {
                     className="relative z-10 h-full flex flex-col justify-end p-8 lg:p-12"
                   >
                     <span className="label-meta" style={{ color: AMBER }}>{activeTab.label}</span>
-                    <h3 className="mt-4 font-display text-3xl lg:text-4xl leading-tight" style={{ color: IVORY }}>
-                      {activeTab.title}
-                    </h3>
-                    <p className="mt-4 text-lg leading-relaxed max-w-md" style={{ color: `${IVORY}CC` }}>
-                      {activeTab.body}
-                    </p>
+                    <h3 className="mt-4 font-display text-3xl lg:text-4xl leading-tight" style={{ color: IVORY }}>{activeTab.title}</h3>
+                    <p className="mt-4 text-lg leading-relaxed max-w-md" style={{ color: `${IVORY}CC` }}>{activeTab.body}</p>
                   </motion.div>
                 </AnimatePresence>
               </div>
