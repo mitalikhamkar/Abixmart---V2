@@ -1,45 +1,139 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, Minus, Plus, ArrowLeft } from 'lucide-react';
+import { X, Check, ArrowLeft, Loader2 } from 'lucide-react';
 import { useShop } from '@/lib/ShopContext';
-import { featuredProduct } from '@/data/products';
+import { useAuth } from '@/lib/AuthContext';
+import { createOrder } from '@/lib/orderUtils';
 
-const steps = ['Product', 'Quantity', 'Details', 'Address', 'Payment', 'Confirm'];
+// CHANGED — Phase 2: driven by the real cart (cartItems/cartTotal)
+// instead of the hardcoded featuredProduct. The old "Quantity" step is
+// removed — quantities are per-product now, already editable in
+// CartDrawer — replaced with an "Items" step listing everything in the
+// cart. Email/City/State/Pincode/Country fields were added since the
+// order structure requires them; all are prefilled from the signed-in
+// user's existing profile fields where available.
+const steps = ['Items', 'Details', 'Address', 'Payment', 'Confirm'];
 
 export default function CheckoutModal() {
-  const { checkoutOpen, checkoutPrefill, closeCheckout } = useShop();
-  const [step, setStep] = useState(0);
-  const [qty, setQty] = useState(1);
-  const [form, setForm] = useState({ name: '', phone: '', address: '', payment: 'UPI' });
-  const [placed, setPlaced] = useState(false);
+  const { checkoutOpen, closeCheckout, cartItems, cartTotal, clearCart } = useShop();
+  const { user, profile } = useAuth();
 
-  // reset / hydrate when opened
+  const [step, setStep] = useState(0);
+  const [form, setForm] = useState({
+    fullName: '', email: '', phone: '',
+    address: '', city: '', state: '', pincode: '', country: 'India',
+    payment: 'COD',
+  });
+  const [placed, setPlaced] = useState(false);
+  const [placedOrderId, setPlacedOrderId] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [orderError, setOrderError] = useState('');
+
   useEffect(() => {
     if (checkoutOpen) {
       setStep(0);
       setPlaced(false);
-      setQty(checkoutPrefill?.jars || 1);
-      setForm({ name: '', phone: '', address: '', payment: 'UPI' });
+      setPlacedOrderId(null);
+      setOrderError('');
+      setForm({
+        fullName: profile?.fullName || '',
+        email: user?.email || '',
+        phone: profile?.phone || '',
+        address: profile?.address || '',
+        city: profile?.city || '',
+        state: profile?.state || '',
+        pincode: profile?.pincode || '',
+        country: profile?.country || 'India',
+        payment: 'COD',
+      });
     }
-  }, [checkoutOpen, checkoutPrefill]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkoutOpen]);
 
   if (!checkoutOpen) return null;
 
-  const unit = featuredProduct.price;
-  const total = unit * qty;
-  const productLabel = checkoutPrefill?.name || `${featuredProduct.name} — ${featuredProduct.subtitle}`;
+  const shipping = 0;
+  const total = cartTotal + shipping;
 
   const next = () => setStep((s) => Math.min(steps.length - 1, s + 1));
   const back = () => setStep((s) => Math.max(0, s - 1));
 
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
+
   const canNext = () => {
-    if (step === 2) return form.name.trim() && form.phone.trim().length >= 10;
-    if (step === 3) return form.address.trim().length > 5;
+    if (step === 0) return cartItems.length > 0;
+    if (step === 1) return form.fullName.trim() && form.phone.trim().length >= 10 && emailValid;
+    if (step === 2) {
+      return (
+        form.address.trim().length > 5 &&
+        form.city.trim() &&
+        form.state.trim() &&
+        /^\d{6}$/.test(form.pincode.trim()) &&
+        form.country.trim()
+      );
+    }
     return true;
   };
 
-  const placeOrder = () => {
-    setPlaced(true);
+  // Guarded against double-click: `submitting` blocks a second call
+  // from firing while the first is still awaiting Firestore.
+  const placeOrder = async () => {
+    if (submitting) return;
+    if (!user) {
+      setOrderError('Please log in to place your order.');
+      return;
+    }
+    if (cartItems.length === 0) {
+      setOrderError('Your cart is empty.');
+      return;
+    }
+
+    setSubmitting(true);
+    setOrderError('');
+
+    const items = cartItems.map(({ id, qty, product }) => ({
+      productId: id,
+      name: product.name,
+      qty,
+      unitPrice: product.price,
+      subtotal: product.price * qty,
+    }));
+
+    try {
+      const orderId = await createOrder({
+        uid: user.uid,
+        customer: {
+          fullName: form.fullName.trim(),
+          email: form.email.trim(),
+          phone: form.phone.trim(),
+        },
+        shippingAddress: {
+          address: form.address.trim(),
+          city: form.city.trim(),
+          state: form.state.trim(),
+          pincode: form.pincode.trim(),
+          country: form.country.trim(),
+        },
+        items,
+        subtotal: cartTotal,
+        shipping,
+        total,
+        paymentMethod: form.payment,
+      });
+
+      // Cart is cleared only AFTER Firestore confirms the order — a
+      // failed write below leaves it completely untouched.
+      clearCart();
+      setPlacedOrderId(orderId);
+      setPlaced(true);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[ABIXMART] Failed to create order', err?.code, err?.message, err);
+      setOrderError('Something went wrong placing your order. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -59,7 +153,6 @@ export default function CheckoutModal() {
           className="w-full max-w-lg bg-ivory max-h-[92vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* header */}
           <div className="sticky top-0 bg-ivory z-10 flex items-center justify-between px-6 py-5 border-b border-greendark/10">
             <div className="flex items-center gap-3">
               {step > 0 && !placed && (
@@ -76,7 +169,6 @@ export default function CheckoutModal() {
             </button>
           </div>
 
-          {/* progress */}
           {!placed && (
             <div className="px-6 pt-5">
               <div className="flex items-center gap-1.5">
@@ -93,8 +185,34 @@ export default function CheckoutModal() {
           )}
 
           <div className="px-6 py-7">
-            {placed ? (
-              <Confirmation form={form} total={total} qty={qty} productLabel={productLabel} onClose={closeCheckout} />
+            {!user && !placed ? (
+              <div className="text-center py-6">
+                <h3 className="font-display text-2xl text-greendark">Please sign in to check out</h3>
+                <p className="mt-2 text-foreground/55 text-sm max-w-xs mx-auto">
+                  Your order needs an account so we can save it and keep you updated.
+                </p>
+                <Link
+                  to="/login"
+                  onClick={closeCheckout}
+                  className="mt-6 inline-flex h-12 px-7 items-center bg-greendark text-ivory text-[11px] font-semibold tracking-luxe-sm uppercase hover:bg-gold hover:text-greendark transition-colors"
+                >
+                  Log in
+                </Link>
+              </div>
+            ) : cartItems.length === 0 && !placed ? (
+              <div className="text-center py-6">
+                <h3 className="font-display text-2xl text-greendark">Your cart is empty</h3>
+                <p className="mt-2 text-foreground/55 text-sm">Add something to your ritual before checking out.</p>
+                <Link
+                  to="/shop"
+                  onClick={closeCheckout}
+                  className="mt-6 inline-flex h-12 px-7 items-center bg-greendark text-ivory text-[11px] font-semibold tracking-luxe-sm uppercase hover:bg-gold hover:text-greendark transition-colors"
+                >
+                  Explore the shop
+                </Link>
+              </div>
+            ) : placed ? (
+              <Confirmation orderId={placedOrderId} form={form} total={total} cartItems={cartItems} onClose={closeCheckout} />
             ) : (
               <AnimatePresence mode="wait">
                 <motion.div
@@ -106,42 +224,41 @@ export default function CheckoutModal() {
                 >
                   {step === 0 && (
                     <div>
-                      <h3 className="font-display text-2xl text-greendark">Your product</h3>
-                      <div className="mt-5 flex items-center gap-4 p-4 bg-sand">
-                        <div className="h-16 w-16 bg-greendark/10 flex items-center justify-center font-display text-2xl text-greendark/40">A</div>
-                        <div className="flex-1">
-                          <p className="font-display text-lg text-greendark leading-tight">{productLabel}</p>
-                          <p className="text-sm text-foreground/55">{featuredProduct.size} · Pure Resin</p>
-                        </div>
-                        <span className="font-price text-xl text-greendark">₹{unit}</span>
+                      <h3 className="font-display text-2xl text-greendark">Your items</h3>
+                      <div className="mt-5 space-y-3">
+                        {cartItems.map(({ id, qty, product }) => (
+                          <div key={id} className="flex items-center gap-4 p-4 bg-sand">
+                            <div className="h-14 w-14 shrink-0 bg-greendark/10 overflow-hidden flex items-center justify-center">
+                              {product.image ? (
+                                <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
+                              ) : (
+                                <span className="font-display text-xl text-greendark/40">{product.name.charAt(0)}</span>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-display text-lg text-greendark leading-tight">{product.name}</p>
+                              <p className="text-sm text-foreground/55">Qty {qty}</p>
+                            </div>
+                            <span className="font-price text-lg text-greendark">{product.currency}{product.price * qty}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-5 flex items-center justify-between border-t border-greendark/15 pt-4">
+                        <span className="text-sm text-foreground/55">Total</span>
+                        <span className="font-price text-2xl text-greendark">₹{total}</span>
                       </div>
                     </div>
                   )}
 
                   {step === 1 && (
                     <div>
-                      <h3 className="font-display text-2xl text-greendark">How many?</h3>
-                      <p className="mt-2 text-foreground/55 text-sm">Choose the quantity for your ritual.</p>
-                      <div className="mt-7 flex items-center justify-center gap-6">
-                        <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="h-12 w-12 inline-flex items-center justify-center border border-greendark/25 text-greendark hover:bg-sand transition-colors">
-                          <Minus size={18} />
-                        </button>
-                        <span className="font-price text-5xl text-greendark w-16 text-center">{qty}</span>
-                        <button onClick={() => setQty((q) => q + 1)} className="h-12 w-12 inline-flex items-center justify-center border border-greendark/25 text-greendark hover:bg-sand transition-colors">
-                          <Plus size={18} />
-                        </button>
-                      </div>
-                      <p className="mt-6 text-center font-price text-2xl text-greendark">Total ₹{unit * qty}</p>
-                    </div>
-                  )}
-
-                  {step === 2 && (
-                    <div>
                       <h3 className="font-display text-2xl text-greendark">Your details</h3>
-                      <p className="mt-2 text-foreground/55 text-sm">No account needed. Just your name and phone.</p>
                       <div className="mt-6 space-y-4">
                         <Field label="Full name">
-                          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Your name" className="express-input" />
+                          <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} placeholder="Your name" className="express-input" />
+                        </Field>
+                        <Field label="Email">
+                          <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@example.com" className="express-input" />
                         </Field>
                         <Field label="Phone number">
                           <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/[^0-9]/g, '').slice(0, 10) })} inputMode="numeric" placeholder="10-digit mobile" className="express-input" />
@@ -150,27 +267,43 @@ export default function CheckoutModal() {
                     </div>
                   )}
 
-                  {step === 3 && (
+                  {step === 2 && (
                     <div>
                       <h3 className="font-display text-2xl text-greendark">Delivery address</h3>
-                      <Field label="Full address">
-                        <textarea value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="House no, street, area, city, pincode" rows={4} className="express-input resize-none" />
-                      </Field>
+                      <div className="mt-6 space-y-4">
+                        <Field label="Address">
+                          <textarea value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="House no, street, area" rows={3} className="express-input resize-none" />
+                        </Field>
+                        <div className="grid grid-cols-2 gap-4">
+                          <Field label="City">
+                            <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="City" className="express-input" />
+                          </Field>
+                          <Field label="State">
+                            <input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} placeholder="State" className="express-input" />
+                          </Field>
+                          <Field label="Pincode">
+                            <input value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/[^0-9]/g, '').slice(0, 6) })} inputMode="numeric" placeholder="6-digit pincode" className="express-input" />
+                          </Field>
+                          <Field label="Country">
+                            <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="Country" className="express-input" />
+                          </Field>
+                        </div>
+                      </div>
                     </div>
                   )}
 
-                  {step === 4 && (
+                  {step === 3 && (
                     <div>
                       <h3 className="font-display text-2xl text-greendark">Payment method</h3>
                       <p className="mt-2 text-foreground/55 text-sm">Payment gateway integration is coming soon. This is a prototype.</p>
                       <div className="mt-6 space-y-3">
-                        {['UPI', 'Card', 'Cash on Delivery'].map((m) => (
+                        {['COD', 'UPI', 'Card'].map((m) => (
                           <button
                             key={m}
                             onClick={() => setForm({ ...form, payment: m })}
                             className={`w-full flex items-center justify-between p-4 border transition-colors ${form.payment === m ? 'border-greendark bg-sand' : 'border-greendark/20 hover:border-greendark/40'}`}
                           >
-                            <span className="font-display text-lg text-greendark">{m}</span>
+                            <span className="font-display text-lg text-greendark">{m === 'COD' ? 'Cash on Delivery' : m}</span>
                             <span className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${form.payment === m ? 'border-greendark' : 'border-greendark/30'}`}>
                               {form.payment === m && <span className="h-2.5 w-2.5 rounded-full bg-greendark" />}
                             </span>
@@ -180,29 +313,31 @@ export default function CheckoutModal() {
                     </div>
                   )}
 
-                  {step === 5 && (
+                  {step === 4 && (
                     <div>
                       <h3 className="font-display text-2xl text-greendark">Confirm your order</h3>
                       <div className="mt-5 space-y-3 text-sm">
-                        <Row label="Product" value={productLabel} />
-                        <Row label="Quantity" value={`${qty} jar${qty > 1 ? 's' : ''}`} />
-                        <Row label="Name" value={form.name} />
+                        {cartItems.map(({ id, qty, product }) => (
+                          <Row key={id} label={product.name} value={`Qty ${qty} · ₹${product.price * qty}`} />
+                        ))}
+                        <Row label="Name" value={form.fullName} />
+                        <Row label="Email" value={form.email} />
                         <Row label="Phone" value={form.phone} />
-                        <Row label="Address" value={form.address} />
-                        <Row label="Payment" value={form.payment} />
+                        <Row label="Address" value={`${form.address}, ${form.city}, ${form.state} ${form.pincode}, ${form.country}`} />
+                        <Row label="Payment" value={form.payment === 'COD' ? 'Cash on Delivery' : form.payment} />
                         <div className="border-t border-greendark/15 pt-3 flex items-center justify-between">
                           <span className="font-display text-lg text-greendark">Total</span>
                           <span className="font-price text-2xl text-greendark">₹{total}</span>
                         </div>
                       </div>
+                      {orderError && <p className="mt-4 text-sm text-destructive">{orderError}</p>}
                     </div>
                   )}
                 </motion.div>
               </AnimatePresence>
             )}
 
-            {/* footer actions */}
-            {!placed && (
+            {!placed && user && cartItems.length > 0 && (
               <div className="mt-8">
                 {step < steps.length - 1 ? (
                   <button
@@ -216,9 +351,16 @@ export default function CheckoutModal() {
                 ) : (
                   <button
                     onClick={placeOrder}
-                    className="group w-full h-14 inline-flex items-center justify-center bg-greendark text-ivory text-[12px] font-semibold tracking-luxe-sm uppercase hover:bg-gold hover:text-greendark transition-colors duration-300"
+                    disabled={submitting}
+                    className="group w-full h-14 inline-flex items-center justify-center gap-2 bg-greendark text-ivory text-[12px] font-semibold tracking-luxe-sm uppercase disabled:opacity-60 hover:bg-gold hover:text-greendark transition-colors duration-300"
                   >
-                    Place order · ₹{total}
+                    {submitting ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" /> Placing order…
+                      </>
+                    ) : (
+                      `Place order · ₹${total}`
+                    )}
                   </button>
                 )}
                 <p className="mt-4 text-center text-xs text-foreground/40">
@@ -251,23 +393,21 @@ function Row({ label, value }) {
   );
 }
 
-function Confirmation({ form, total, qty, productLabel, onClose }) {
+function Confirmation({ orderId, form, total, cartItems, onClose }) {
+  const itemCount = cartItems.reduce((n, c) => n + c.qty, 0);
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.96 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="text-center py-6"
-    >
+    <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-6">
       <div className="mx-auto h-20 w-20 rounded-full bg-greendark flex items-center justify-center mb-7">
         <Check size={36} className="text-gold" />
       </div>
-      <h3 className="font-display text-3xl text-greendark">Thank you, {form.name.split(' ')[0] || 'friend'}.</h3>
+      <h3 className="font-display text-3xl text-greendark">Thank you, {form.fullName.split(' ')[0] || 'friend'}.</h3>
       <p className="mt-3 text-foreground/60 max-w-xs mx-auto">
-        Your order for {qty} jar{qty > 1 ? 's' : ''} of ABIXMART Shilajit is confirmed. We'll text updates to {form.phone}.
+        Your order for {itemCount} item{itemCount > 1 ? 's' : ''} is confirmed. We'll text updates to {form.phone}.
       </p>
       <div className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-sand text-greendark text-sm">
         Order total <span className="font-price text-lg">₹{total}</span>
       </div>
+      {orderId && <p className="mt-3 text-xs text-foreground/40">Order reference: {orderId}</p>}
       <p className="mt-5 text-xs text-foreground/40">A confirmation has been queued for the next phase.</p>
       <button onClick={onClose} className="mt-8 h-12 px-8 border border-greendark text-greendark text-[11px] font-semibold tracking-luxe-sm uppercase hover:bg-greendark hover:text-ivory transition-colors">
         Back to ABIXMART
