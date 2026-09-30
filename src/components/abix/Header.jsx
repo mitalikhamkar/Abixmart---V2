@@ -14,7 +14,10 @@ const navLinks = [
 ];
 
 export default function Header() {
-  const { cartCount, wishlistCount, openCart, openSearch } = useShop();
+  // CHANGED: removed `openCart` from this destructure — the cart icon
+  // now navigates to the /cart page instead of opening CartDrawer, so
+  // this callback is no longer used here.
+  const { cartCount, wishlistCount, openSearch } = useShop();
   const { user, profile, logout } = useAuth();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -53,24 +56,6 @@ export default function Header() {
   const onHome = location.pathname === '/';
   const transparent = onHome && !scrolled;
 
-  // FIX — sticky/scrolled header contrast: the ABIXMART logo asset is a
-  // dark-green wordmark on a transparent background, with no light-bg
-  // variant. Against the previous dark bg-espresso/90 scrolled bar, it
-  // had almost no lightness contrast — and since `transparent` is only
-  // ever true on Home before scrolling, every OTHER route (Shop, About,
-  // Support, ProductDetail) rendered this same low-contrast dark bar
-  // permanently, not just "after scrolling."
-  //
-  // The fix is at the background level, not the logo: the non-transparent
-  // header now uses the project's existing `ivory` brand tone (the same
-  // #F2ECE2 already used as a token elsewhere in the codebase) instead of
-  // a dark bar — giving the unmodified logo the light background it
-  // actually needs, without a box/badge around it. Because the header
-  // background itself flips from dark to light in this state, the nav
-  // links/icons/active-underline/menu icon are switched to charcoal-based
-  // tones ONLY in this branch — the necessary, direct consequence of
-  // fixing contrast this way. The transparent (top-of-Home) state below
-  // is completely unchanged.
   const headerBgClass = transparent
     ? 'bg-transparent'
     : 'bg-[#F2ECE2]/95 backdrop-blur-md border-b border-charcoal/10';
@@ -130,8 +115,11 @@ export default function Header() {
             >
               <Search size={19} />
             </button>
+
+            {/* FIXED: was `to="/shop"` — the heart never actually opened
+                the Wishlist page. Now goes to /wishlist as required. */}
             <Link
-              to="/shop"
+              to="/wishlist"
               className={`relative h-10 w-10 inline-flex items-center justify-center transition-colors ${iconClass}`}
               aria-label="Wishlist"
             >
@@ -142,8 +130,13 @@ export default function Header() {
                 </span>
               )}
             </Link>
-            <button
-              onClick={openCart}
+
+            {/* FIXED: was a <button onClick={openCart}> that opened
+                CartDrawer. Now a Link straight to the /cart page —
+                works identically whether the cart is empty or has
+                items, and never opens a drawer. */}
+            <Link
+              to="/cart"
               className={`relative h-10 w-10 inline-flex items-center justify-center transition-colors ${iconClass}`}
               aria-label="Cart"
             >
@@ -153,7 +146,8 @@ export default function Header() {
                   {cartCount}
                 </span>
               )}
-            </button>
+            </Link>
+
             {user ? (
               <div className="relative" ref={accountMenuRef}>
                 <button
@@ -210,9 +204,6 @@ export default function Header() {
         </nav>
       </header>
 
-      {/* Mobile menu — full-screen overlay, unrelated to the header's own
-          background/contrast fix above; doesn't render the logo again,
-          so it isn't part of this scope. Unchanged. */}
       <AnimatePresence>
         {open && (
           <motion.div

@@ -26,6 +26,7 @@ import {
   ritualBundles,
 } from '@/data/products';
 import { useAuth } from '@/lib/AuthContext';
+import { getOrderForTracking, statusToStage, statusToDetailIndex } from '@/lib/orderUtils';
 import { ABIX } from '@/components/abix/brandColors';
 
 import supportHero from '@/assets/support/support-hero.png';
@@ -76,12 +77,86 @@ export default function Support() {
   const [tracked, setTracked] = useState(false);
   const [hoveredCard, setHoveredCard] = useState(null);
 
-  const demoStage = 3;
+  // CHANGED — real order tracking. `tracked` now just means "a lookup
+  // has run"; the actual result lives in trackedOrder/trackError below,
+  // and the existing 3-stage + detailed step UI reads its progress from
+  // trackedOrder.orderStatus instead of a hardcoded demo stage.
+  const [tracking, setTracking] = useState(false);
+  const [trackError, setTrackError] = useState('');
+  const [trackedOrder, setTrackedOrder] = useState(null);
+
+  // Looks up one order by orderId, scoped to the signed-in customer.
+  // Shared by the manual "Track order" submit and by the auto-lookup
+  // that runs when Support is opened from Profile → Orders with
+  // ?orderId=... already in the URL.
+  const runTrack = async (idToTrack) => {
+    const trimmed = (idToTrack ?? orderId).trim();
+    if (!trimmed) return;
+
+    if (!user) {
+      setTracked(true);
+      setTrackedOrder(null);
+      setTrackError('Please log in to track your order.');
+      return;
+    }
+
+    setTracking(true);
+    setTrackError('');
+    try {
+      const order = await getOrderForTracking(trimmed, user.uid);
+      if (!order) {
+        setTrackedOrder(null);
+        setTrackError('Order not found.');
+      } else {
+        setTrackedOrder(order);
+      }
+      setTracked(true);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[ABIXMART] Order tracking lookup failed:', err?.code, err?.message, err);
+      setTrackedOrder(null);
+      setTrackError('Something went wrong looking up that order. Please try again.');
+      setTracked(true);
+    } finally {
+      setTracking(false);
+    }
+  };
 
   const handleTrack = (e) => {
     e.preventDefault();
-    setTracked(true);
+    runTrack(orderId);
   };
+
+  // Prefill the order ID input from ?orderId=... (the link Profile →
+  // Orders → "Track Order" sends customers here with).
+  useEffect(() => {
+    const qid = searchParams.get('orderId');
+    if (!qid) return;
+    setOrderId(qid);
+    // The app's <ScrollToTop /> resets scroll position on every route
+    // change, which would otherwise fight the browser's normal
+    // jump-to-#tracking behavior and strand the customer at the top of
+    // the page instead of at the section holding their prefilled ID.
+    // requestAnimationFrame runs this after that reset has settled.
+    requestAnimationFrame(() => {
+      document.getElementById('tracking')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-run the lookup once we know who's asking. Guarded by a ref so
+  // it only ever fires once per page load, not on every auth refresh.
+  const autoTrackedRef = useRef(false);
+  useEffect(() => {
+    const qid = searchParams.get('orderId');
+    if (!qid || autoTrackedRef.current || !user) return;
+    autoTrackedRef.current = true;
+    runTrack(qid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  const topStage = trackedOrder ? statusToStage(trackedOrder.orderStatus) : null;
+  const detailIndex = trackedOrder ? statusToDetailIndex(trackedOrder.orderStatus) : null;
 
   // Inquiry form writes to Firestore `inquiries/{inquiryId}` —
   // the same collection and schema the admin panel's Inquiries section reads.
@@ -496,7 +571,7 @@ export default function Support() {
               <input
                 value={orderId}
                 onChange={(e) => setOrderId(e.target.value)}
-                placeholder="e.g. ABX-2026-001"
+                placeholder="e.g. ABX-20260927-7K4M2"
                 className={inputClass}
                 style={{
                   borderColor: `${IVORY}30`,
@@ -511,7 +586,8 @@ export default function Support() {
 
               <button
                 type="submit"
-                className="h-14 px-8 text-charcoal text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300 shrink-0"
+                disabled={tracking}
+                className="h-14 px-8 text-charcoal text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300 shrink-0 disabled:opacity-60"
                 style={{
                   background: AMBER_FILL,
                 }}
@@ -522,15 +598,19 @@ export default function Support() {
                   e.currentTarget.style.background = AMBER_FILL;
                 }}
               >
-                Track order
+                {tracking ? 'Tracking…' : 'Track order'}
               </button>
             </form>
           </div>
 
           <div>
             <div className="flex items-center justify-between max-w-md">
+              {/* CHANGED: `active` is now per-stage (i <= topStage) driven
+                  by the real orderStatus, instead of the same boolean for
+                  all three circles — the old version showed full fake
+                  progress the instant anything was tracked. */}
               {['Order', 'In Transit', 'Delivered'].map((label, i) => {
-                const active = tracked;
+                const active = tracked && trackedOrder != null && i <= topStage;
 
                 return (
                   <React.Fragment key={label}>
@@ -592,7 +672,36 @@ export default function Support() {
               })}
             </div>
 
-            {tracked ? (
+            {/* CHANGED: this whole block now branches on the real lookup
+                result (loading / error / not-found / needs-login / found)
+                instead of a single `tracked` boolean with hardcoded demo
+                data. Visual treatment (borders, spacing, GRAPHITE panel)
+                is unchanged from the original. */}
+            {tracking ? (
+              <p className="mt-10 text-sm" style={{ color: MUTED }}>
+                Looking up your order…
+              </p>
+            ) : trackError ? (
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-10 border p-6"
+                style={{ borderColor: `${IVORY}1A`, background: GRAPHITE }}
+              >
+                <p className="font-display text-xl" style={{ color: IVORY }}>
+                  {trackError}
+                </p>
+                {!user && (
+                  <Link
+                    to="/login"
+                    className="mt-4 inline-flex text-sm underline underline-offset-4"
+                    style={{ color: AMBER }}
+                  >
+                    Log in
+                  </Link>
+                )}
+              </motion.div>
+            ) : tracked && trackedOrder ? (
               <motion.div
                 initial={{
                   opacity: 0,
@@ -613,19 +722,19 @@ export default function Support() {
                     className="font-display text-xl"
                     style={{ color: IVORY }}
                   >
-                    Order {orderId || 'ABX-2026-001'}
+                    Order {trackedOrder.orderId}
                   </span>
 
                   <span
                     className="label-meta"
                     style={{ color: AMBER }}
                   >
-                    {orderSteps[demoStage]?.label || 'In Transit'}
+                    {orderSteps[detailIndex]?.label}
                   </span>
                 </div>
 
                 {orderSteps.map((s, i) => {
-                  const done = i <= demoStage;
+                  const done = i <= detailIndex;
 
                   return (
                     <div

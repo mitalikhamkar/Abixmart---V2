@@ -1,6 +1,6 @@
 // src/components/abix/ProductCard.jsx
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, ShoppingBag, Heart } from 'lucide-react';
 import { useShop } from '@/lib/ShopContext';
@@ -9,11 +9,16 @@ import { ABIX } from './brandColors';
 export default function ProductCard({ product, onQuickView }) {
   const { addToCart, toggleWishlist, isInWishlist } = useShop();
   const wishlisted = isInWishlist(product.id);
+  const navigate = useNavigate();
 
+  // CHANGED: Quick Add now navigates to /cart after adding the item,
+  // instead of relying on ShopContext to pop open CartDrawer (which no
+  // longer opens automatically — see ShopContext.jsx).
   const handleQuickAdd = (e) => {
     e.preventDefault();
     e.stopPropagation();
     addToCart(product.id, 1);
+    navigate('/cart');
   };
 
   const handleWishlist = (e) => {
@@ -44,8 +49,6 @@ export default function ProductCard({ product, onQuickView }) {
           Available
         </span>
 
-        {/* NEW: wishlist heart, top-right, visible without opening
-            Quick View or Product Detail. */}
         <button
           onClick={handleWishlist}
           aria-label={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}

@@ -41,6 +41,12 @@ export function ShopProvider({ children }) {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutPrefill, setCheckoutPrefill] = useState(null);
   const [assistOpen, setAssistOpen] = useState(false);
+  // NOTE: cartOpen/openCart/closeCart are kept only so CartDrawer.jsx
+  // (which is intentionally left in the project per the brief) still
+  // compiles if it's ever re-rendered. Nothing in the app calls
+  // openCart() anymore — the header and every "add to cart" action
+  // navigate to the /cart page instead. See ProductCard.jsx,
+  // ProductDetail.jsx and Header.jsx.
   const [cartOpen, setCartOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -50,11 +56,10 @@ export function ShopProvider({ children }) {
 
   const productById = useCallback((id) => products.find((p) => p.id === id), []);
 
-  // CHANGED — Phase 3: addToCart now optionally accepts a variant
-  // ({ id, label, price }, e.g. one of ritualBundles). Existing calls
-  // like addToCart(id, 1) are unaffected — variant defaults to null,
-  // so unitPrice stays undefined and cartItems falls back to
-  // product.price, exactly as before.
+  // CHANGED: no longer calls setCartOpen(true). Adding to cart must
+  // never open CartDrawer — the calling component (ProductCard's Quick
+  // Add, ProductDetail's Add to Cart) is responsible for navigating to
+  // /cart itself, so this stays a pure state update.
   const addToCart = useCallback((id, qty = 1, variant = null) => {
     setCart((prev) => {
       const variantId = variant?.id ?? null;
@@ -70,12 +75,8 @@ export function ShopProvider({ children }) {
         { id, qty, variantId, variantLabel: variant?.label ?? null, unitPrice: variant?.price ?? null },
       ];
     });
-    setCartOpen(true);
   }, []);
 
-  // CHANGED: now takes an optional variantId so a specific package line
-  // can be removed. Old calls (just an id) still work — they only
-  // remove the no-variant line for that product, same as before.
   const removeFromCart = useCallback((id, variantId = null) => {
     setCart((prev) => prev.filter((c) => !(c.id === id && (c.variantId || null) === (variantId || null))));
   }, []);
@@ -227,11 +228,6 @@ export function ShopProvider({ children }) {
     })();
   }, [wishlist, user]);
 
-  // CHANGED — Phase 3: each cart item now carries its own resolved
-  // unitPrice (variant price if set, else product.price) and subtotal
-  // (unitPrice × qty). cartTotal sums those subtotals rather than
-  // recomputing product.price × qty, which is what fixed the
-  // "2 Jar Ritual priced at product.price×2" bug.
   const cartItems = useMemo(
     () =>
       cart

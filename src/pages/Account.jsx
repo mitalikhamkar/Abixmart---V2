@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import PageTransition from '@/components/abix/PageTransition';
 import { useAuth } from '@/lib/AuthContext';
+import { getOrdersForUser, getDisplayOrderId } from '@/lib/orderUtils';
 import mineralBg from '@/assets/shilajit-steps/himalayaBG.png';
 import logo from '@/assets/logo/Abixmart-header.png';
 // ABIXMART account branding
@@ -53,6 +54,18 @@ const SPACE_SECTIONS = [
   },
 ];
 
+// CHANGED: real orderStatus values (see orderUtils.js) mapped to
+// display labels for the order card badge.
+const STATUS_LABELS = {
+  placed: 'Placed',
+  confirmed: 'Confirmed',
+  processing: 'Processing',
+  packed: 'Packed',
+  shipped: 'Shipped',
+  out_for_delivery: 'Out for Delivery',
+  delivered: 'Delivered',
+};
+
 function formatMemberSince(createdAt, fallbackAuthCreationTime) {
   let date = createdAt?.toDate ? createdAt.toDate() : createdAt ? new Date(createdAt) : null;
   if ((!date || Number.isNaN(date.getTime())) && fallbackAuthCreationTime) {
@@ -60,6 +73,12 @@ function formatMemberSince(createdAt, fallbackAuthCreationTime) {
   }
   if (!date || Number.isNaN(date.getTime())) return '—';
   return date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+}
+
+function formatOrderDate(createdAt) {
+  const date = createdAt?.toDate ? createdAt.toDate() : createdAt ? new Date(createdAt) : null;
+  if (!date || Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 // Validation for the editable profile form. Kept in the page (not
@@ -79,13 +98,18 @@ function validateProfileForm(form) {
   return errors;
 }
 
-// Small field renderer for view mode — shows "Not added" for empty
-// optional fields rather than a blank/awkward gap.
+// CHANGED: removed `font-display` from the value line. This is the
+// component that renders phone numbers, pincodes, addresses, and
+// other account data — `font-display` is the site's decorative
+// display face, which is exactly the "Roman-style" numerals/text the
+// brief wants gone from practical information. Values now render in
+// the default (non-decorative) UI font; only the section headings
+// elsewhere on this page keep font-display.
 function InfoField({ label, value }) {
   return (
     <div className="border border-ivory/10 bg-ivory/5 backdrop-blur-sm rounded-lg px-5 py-4">
       <dt className="label-meta text-ivory/40">{label}</dt>
-      <dd className={`mt-1.5 text-base sm:text-lg font-display truncate ${value ? 'text-ivory' : 'text-ivory/35 italic'}`}>
+      <dd className={`mt-1.5 text-base sm:text-lg truncate ${value ? 'text-ivory' : 'text-ivory/35 italic'}`}>
         {value || 'Not added'}
       </dd>
     </div>
@@ -98,6 +122,126 @@ function EditField({ label, error, children }) {
       <label className="label-meta text-ivory/50 mb-1 block">{label}</label>
       {children}
       {error && <p className="mt-1 text-[11px] text-red-300">{error}</p>}
+    </div>
+  );
+}
+
+// NEW: Profile → Orders, backed by real Firestore data (orders where
+// uid == the signed-in customer's uid — see getOrdersForUser).
+// Visual language (border/bg/rounded-lg cards, label-meta, font-display
+// headings) intentionally matches InfoField/the rest of this page —
+// no new card style introduced.
+function OrdersPanel({ user, navigate }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [orders, setOrders] = useState([]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    getOrdersForUser(user.uid)
+      .then((data) => {
+        if (!cancelled) setOrders(data);
+      })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[ABIXMART] Failed to load orders:', err?.code, err?.message, err);
+        if (!cancelled) setError('Could not load your orders right now. Please try again.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  if (loading) {
+    return <p className="text-ivory/40 text-sm uppercase tracking-luxe-sm">Loading your orders…</p>;
+  }
+
+  if (error) {
+    return <p className="text-sm text-red-300">{error}</p>;
+  }
+
+  if (orders.length === 0) {
+    return (
+      <div className="max-w-xl">
+        <Package size={22} className="text-gold-light" />
+        <h2 className="mt-4 font-display text-2xl text-ivory">Your Ritual Orders</h2>
+        <p className="mt-2 text-ivory/55 leading-relaxed">
+          Your purchases will appear here once you place your first ABIXMART order.
+        </p>
+        <button onClick={() => navigate('/shop')} className="btn-primary-inverse mt-6">
+          Explore Products
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl">
+      <h2 className="font-display text-2xl text-ivory">Your Ritual Orders</h2>
+
+      <div className="mt-6 space-y-4">
+        {orders.map((order) => {
+          const displayId = getDisplayOrderId(order);
+          // Only orders with a real, permanent orderId can be looked up
+          // by the Support page's tracking query — legacy orders without
+          // one need the one-time backfill script run first (see
+          // scripts/backfillOrderIds.js).
+          const trackable = Boolean(order.orderId);
+
+          return (
+            <div
+              key={order.id}
+              className="border border-ivory/10 bg-ivory/5 backdrop-blur-sm rounded-lg px-5 py-4"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-display text-lg text-ivory">{displayId}</span>
+                <span className="label-meta text-gold-light">
+                  {STATUS_LABELS[order.orderStatus] || order.orderStatus || 'Placed'}
+                </span>
+              </div>
+
+              <p className="mt-1 text-xs text-ivory/40">{formatOrderDate(order.createdAt)}</p>
+
+              <div className="mt-4 space-y-1.5">
+                {(order.items || []).map((item, i) => (
+                  <div key={i} className="flex items-center justify-between gap-4 text-sm">
+                    <span className="text-ivory/80 truncate">
+                      {item.name}
+                      {item.variantLabel ? ` — ${item.variantLabel}` : ''}
+                      {' '}× {item.qty}
+                    </span>
+                    <span className="text-ivory/60 shrink-0">₹{item.subtotal}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 flex items-center justify-between border-t border-ivory/10 pt-3">
+                <span className="text-sm text-ivory/50">Total</span>
+                <span className="font-price text-lg text-ivory">₹{order.total}</span>
+              </div>
+
+              <div className="mt-4">
+                {trackable ? (
+                  <button
+                    onClick={() => navigate(`/support?orderId=${encodeURIComponent(order.orderId)}#tracking`)}
+                    className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-luxe-sm text-ivory/70 hover:text-ivory transition-colors border border-ivory/15 hover:border-ivory/30 rounded-full px-3.5 py-2"
+                  >
+                    Track Order
+                  </button>
+                ) : (
+                  <span className="text-xs text-ivory/35 italic">Tracking ID pending update</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -545,7 +689,12 @@ export default function Account() {
               </div>
             )}
 
-            {SPACE_SECTIONS.filter((s) => s.key === activeSection).map((section) => (
+            {/* CHANGED: 'orders' is now handled by the real, Firestore-backed
+                OrdersPanel above instead of the generic static SPACE_SECTIONS
+                card. Addresses/Wishlist/Community are untouched. */}
+            {activeSection === 'orders' && <OrdersPanel user={user} navigate={navigate} />}
+
+            {SPACE_SECTIONS.filter((s) => s.key === activeSection && s.key !== 'orders').map((section) => (
               <div key={section.key} className="max-w-xl">
                 <section.icon size={22} className="text-gold-light" />
                 <h2 className="mt-4 font-display text-2xl text-ivory">{section.heading}</h2>

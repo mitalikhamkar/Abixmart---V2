@@ -34,11 +34,6 @@ export default function ProductDetail() {
   const product = getProductBySlug(slug);
   const { addToCart, toggleWishlist, isInWishlist } = useShop();
 
-  // CHANGED — Phase 3: replaces the old single `qty` state that was
-  // being used both as "which ritual is selected" (jars) and as a
-  // free +/- stepper on the same number — that conflation is exactly
-  // what caused product.price × qty to silently override the correct
-  // ritual price. Now there are two independent, clearly-named states.
   const [selectedVariant, setSelectedVariant] = useState(ritualBundles[0]);
   const [packQty, setPackQty] = useState(1);
   const [tab, setTab] = useState('source');
@@ -65,12 +60,16 @@ export default function ProductDetail() {
   const activeTab = openProductTabs.find((t) => t.key === tab);
   const related = products.filter((p) => p.id !== product.id);
 
+  // CHANGED: navigates to /cart after adding, instead of relying on
+  // ShopContext to open CartDrawer (which no longer happens — see
+  // ShopContext.jsx's addToCart).
   const handleAddToCart = () => {
     addToCart(product.id, packQty, {
       id: selectedVariant.id,
       label: selectedVariant.name,
       price: selectedVariant.price,
     });
+    navigate('/cart');
   };
 
   const handleSendInquiry = () => {
@@ -79,11 +78,6 @@ export default function ProductDetail() {
 
   return (
     <PageTransition>
-      {/* CHANGED: top padding tightened (pt-16 lg:pt-20, was pt-24
-          lg:pt-32) and the image is now capped to a smaller, contained
-          frame instead of a near-full-bleed aspect-[4/5] column — this
-          is what gets purchase controls into the first viewport
-          instead of forcing a long scroll first. */}
       <section className="relative pt-16 lg:pt-20 pb-16 lg:pb-24 overflow-hidden" style={{ background: INK }}>
         <div className="absolute inset-0 grain opacity-[0.04] pointer-events-none" />
 
@@ -124,8 +118,6 @@ export default function ProductDetail() {
                   Available
                 </span>
 
-                {/* NEW: wishlist heart directly on the Product Detail
-                    image too, same behavior as the Shop grid cards. */}
                 <button
                   onClick={() => toggleWishlist(product.id)}
                   aria-label={isInWishlist(product.id) ? 'Remove from wishlist' : 'Add to wishlist'}
@@ -158,11 +150,6 @@ export default function ProductDetail() {
                 ))}
               </dl>
 
-              {/* Ritual selector — CHANGED: now sets selectedVariant
-                  (the actual priced package), not the shared qty state.
-                  Selected price/original/savings all read directly from
-                  selectedVariant, so they update immediately and stay
-                  correct for whichever ritual is chosen. */}
               <div className="mt-7">
                 <span className="label-meta" style={{ color: MUTED }}>Choose your ritual</span>
                 <div className="mt-3 space-y-2">
@@ -192,17 +179,12 @@ export default function ProductDetail() {
                 </div>
               </div>
 
-              {/* Selected price summary — reads only from
-                  selectedVariant, so it can never disagree with the
-                  ritual buttons above. */}
               <div className="mt-6 flex items-baseline gap-3">
                 <span className="font-price text-3xl" style={{ color: IVORY }}>₹{selectedVariant.price}</span>
                 <span className="text-lg line-through" style={{ color: MUTED }}>₹{selectedVariant.originalPrice}</span>
                 <span className="text-sm font-semibold" style={{ color: AMBER }}>{selectedVariant.note}</span>
               </div>
 
-              {/* Pack quantity — how many of the selected package, not
-                  the ritual selector itself. Defaults to 1. */}
               <div className="mt-5 flex items-center gap-5">
                 <div className="inline-flex items-center border h-14 rounded-lg" style={{ borderColor: `${IVORY}30` }}>
                   <button
@@ -228,8 +210,6 @@ export default function ProductDetail() {
                 </span>
               </div>
 
-              {/* CHANGED: primary action is now Add to Cart, replacing
-                  the old "Send Product Inquiry" button in this spot. */}
               <div className="mt-7">
                 <button
                   onClick={handleAddToCart}
@@ -255,10 +235,6 @@ export default function ProductDetail() {
                   How To Take Shilajit
                 </Link>
 
-                {/* CHANGED: Send Inquiry demoted to a plain text link,
-                    kept for anyone who still wants to ask a question
-                    before buying — no longer competing with Add to
-                    Cart for primary-action attention. */}
                 <button onClick={handleSendInquiry} className="text-sm underline underline-offset-4 transition-colors" style={{ color: MUTED }}>
                   Or send a product inquiry
                 </button>

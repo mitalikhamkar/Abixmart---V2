@@ -1,19 +1,60 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, ArrowLeft, Loader2 } from 'lucide-react';
+import { X, Check, ArrowLeft, Loader2, Pencil } from 'lucide-react';
 import { useShop } from '@/lib/ShopContext';
 import { useAuth } from '@/lib/AuthContext';
 import { createOrder } from '@/lib/orderUtils';
+import { ABIX } from '@/components/abix/brandColors';
 
-// CHANGED — Phase 2: driven by the real cart (cartItems/cartTotal)
-// instead of the hardcoded featuredProduct. The old "Quantity" step is
-// removed — quantities are per-product now, already editable in
-// CartDrawer — replaced with an "Items" step listing everything in the
-// cart. Email/City/State/Pincode/Country fields were added since the
-// order structure requires them; all are prefilled from the signed-in
-// user's existing profile fields where available.
-const steps = ['Items', 'Details', 'Address', 'Payment', 'Confirm'];
+// CHANGED — theme rebuild: this modal previously used the old light
+// Tailwind palette (bg-ivory / text-greendark / bg-sand), which is why
+// labels and inputs were unreadable against the (also light) modal
+// background. It now uses the same ABIX color tokens + inline-style
+// pattern as Cart.jsx / Wishlist.jsx / ProductDetail.jsx, so it's
+// visually part of the same dark botanical site instead of a
+// leftover light template.
+//
+// CHANGED — "Details" and "Address" are merged into one "Delivery"
+// step that recognizes saved Profile information (name/phone/address)
+// and shows it for review instead of asking the user to retype it.
+// "+ Add another address" reveals the same editable fields as before
+// for a one-off delivery address, without touching the user's saved
+// Profile.
+//
+// No Firebase/order-creation/payment logic changed: createOrder(),
+// its argument shape, and cartItems/cartTotal all come from the same
+// places they did before.
+const steps = ['Items', 'Delivery', 'Payment', 'Confirm'];
+
+const INK = ABIX.obsidian;
+const CARD = ABIX.espresso;
+const IVORY = ABIX.ivory;
+const MUTED = ABIX.ivory45;
+const BORDER = ABIX.ivory12;
+const BORDER_STRONG = ABIX.ivory25;
+const GOLD = ABIX.gold;
+const GOLD_LIGHT = ABIX.goldLight || ABIX.gold;
+
+const inputStyle = {
+  width: '100%',
+  height: '48px',
+  padding: '0 14px',
+  borderRadius: '8px',
+  border: `1px solid ${BORDER_STRONG}`,
+  backgroundColor: `${INK}`,
+  color: IVORY,
+  fontSize: '14px',
+  outline: 'none',
+};
+
+const textareaStyle = { ...inputStyle, height: 'auto', padding: '12px 14px', lineHeight: 1.5 };
+
+function hasSavedDeliveryInfo(profile) {
+  return Boolean(
+    profile?.fullName && profile?.phone && profile?.address && profile?.city && profile?.state && profile?.pincode
+  );
+}
 
 export default function CheckoutModal() {
   const { checkoutOpen, closeCheckout, cartItems, cartTotal, clearCart } = useShop();
@@ -25,10 +66,17 @@ export default function CheckoutModal() {
     address: '', city: '', state: '', pincode: '', country: 'India',
     payment: 'COD',
   });
+  // 'saved' shows the read-only saved-profile card; 'new' reveals the
+  // editable address form (either because the user chose "Add another
+  // address", or because there's no usable saved info yet).
+  const [addressMode, setAddressMode] = useState('saved');
+  const [editingPhone, setEditingPhone] = useState(false);
   const [placed, setPlaced] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [orderError, setOrderError] = useState('');
+
+  const savedInfoAvailable = hasSavedDeliveryInfo(profile);
 
   useEffect(() => {
     if (checkoutOpen) {
@@ -36,6 +84,8 @@ export default function CheckoutModal() {
       setPlaced(false);
       setPlacedOrderId(null);
       setOrderError('');
+      setEditingPhone(false);
+      setAddressMode(hasSavedDeliveryInfo(profile) ? 'saved' : 'new');
       setForm({
         fullName: profile?.fullName || '',
         email: user?.email || '',
@@ -63,9 +113,11 @@ export default function CheckoutModal() {
 
   const canNext = () => {
     if (step === 0) return cartItems.length > 0;
-    if (step === 1) return form.fullName.trim() && form.phone.trim().length >= 10 && emailValid;
-    if (step === 2) {
+    if (step === 1) {
       return (
+        form.fullName.trim() &&
+        form.phone.trim().length === 10 &&
+        emailValid &&
         form.address.trim().length > 5 &&
         form.city.trim() &&
         form.state.trim() &&
@@ -74,6 +126,26 @@ export default function CheckoutModal() {
       );
     }
     return true;
+  };
+
+  const useAnotherAddress = () => {
+    setAddressMode('new');
+    setForm((f) => ({ ...f, fullName: '', phone: '', address: '', city: '', state: '', pincode: '', country: 'India' }));
+  };
+
+  const useSavedAddress = () => {
+    setAddressMode('saved');
+    setEditingPhone(false);
+    setForm((f) => ({
+      ...f,
+      fullName: profile?.fullName || '',
+      phone: profile?.phone || '',
+      address: profile?.address || '',
+      city: profile?.city || '',
+      state: profile?.state || '',
+      pincode: profile?.pincode || '',
+      country: profile?.country || 'India',
+    }));
   };
 
   // Guarded against double-click: `submitting` blocks a second call
@@ -92,7 +164,7 @@ export default function CheckoutModal() {
     setSubmitting(true);
     setOrderError('');
 
-        const items = cartItems.map(({ id, variantId, variantLabel, qty, unitPrice, subtotal, product }) => ({
+    const items = cartItems.map(({ id, variantId, variantLabel, qty, unitPrice, subtotal, product }) => ({
       productId: id,
       variantId: variantId || null,
       variantLabel: variantLabel || null,
@@ -144,7 +216,8 @@ export default function CheckoutModal() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-greendark/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6"
+        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6"
+        style={{ backgroundColor: `${INK}CC`, backdropFilter: 'blur(6px)' }}
         onClick={closeCheckout}
       >
         <motion.div
@@ -152,21 +225,25 @@ export default function CheckoutModal() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: '100%', opacity: 0 }}
           transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-lg bg-ivory max-h-[92vh] overflow-y-auto"
+          className="w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl"
+          style={{ backgroundColor: INK, border: `1px solid ${BORDER}` }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="sticky top-0 bg-ivory z-10 flex items-center justify-between px-6 py-5 border-b border-greendark/10">
+          <div
+            className="sticky top-0 z-10 flex items-center justify-between px-6 py-5 border-b"
+            style={{ backgroundColor: INK, borderColor: BORDER }}
+          >
             <div className="flex items-center gap-3">
               {step > 0 && !placed && (
-                <button onClick={back} className="text-greendark/60 hover:text-greendark transition-colors">
+                <button onClick={back} style={{ color: MUTED }} className="hover:opacity-80 transition-opacity">
                   <ArrowLeft size={20} />
                 </button>
               )}
-              <span className="font-display text-xl text-greendark">
-                {placed ? 'Order placed' : 'Express checkout'}
+              <span className="font-display text-xl" style={{ color: IVORY }}>
+                {placed ? 'Order placed' : 'Checkout'}
               </span>
             </div>
-            <button onClick={closeCheckout} className="text-greendark/60 hover:text-greendark transition-colors">
+            <button onClick={closeCheckout} style={{ color: MUTED }} className="hover:opacity-80 transition-opacity">
               <X size={20} />
             </button>
           </div>
@@ -176,11 +253,14 @@ export default function CheckoutModal() {
               <div className="flex items-center gap-1.5">
                 {steps.map((s, i) => (
                   <div key={s} className="flex-1">
-                    <div className={`h-0.5 transition-colors duration-300 ${i <= step ? 'bg-greendark' : 'bg-greendark/15'}`} />
+                    <div
+                      className="h-0.5 rounded-full transition-colors duration-300"
+                      style={{ backgroundColor: i <= step ? GOLD_LIGHT : BORDER_STRONG }}
+                    />
                   </div>
                 ))}
               </div>
-              <p className="mt-2 label-meta text-foreground/45">
+              <p className="mt-2 text-[11px] uppercase tracking-luxe-sm" style={{ color: MUTED }}>
                 Step {step + 1} of {steps.length} — {steps[step]}
               </p>
             </div>
@@ -189,26 +269,28 @@ export default function CheckoutModal() {
           <div className="px-6 py-7">
             {!user && !placed ? (
               <div className="text-center py-6">
-                <h3 className="font-display text-2xl text-greendark">Please sign in to check out</h3>
-                <p className="mt-2 text-foreground/55 text-sm max-w-xs mx-auto">
+                <h3 className="font-display text-2xl" style={{ color: IVORY }}>Please sign in to check out</h3>
+                <p className="mt-2 text-sm max-w-xs mx-auto" style={{ color: MUTED }}>
                   Your order needs an account so we can save it and keep you updated.
                 </p>
                 <Link
                   to="/login"
                   onClick={closeCheckout}
-                  className="mt-6 inline-flex h-12 px-7 items-center bg-greendark text-ivory text-[11px] font-semibold tracking-luxe-sm uppercase hover:bg-gold hover:text-greendark transition-colors"
+                  className="mt-6 inline-flex h-12 px-7 items-center rounded-full text-[11px] font-semibold tracking-luxe-sm uppercase transition-colors"
+                  style={{ backgroundColor: GOLD, color: INK }}
                 >
                   Log in
                 </Link>
               </div>
             ) : cartItems.length === 0 && !placed ? (
               <div className="text-center py-6">
-                <h3 className="font-display text-2xl text-greendark">Your cart is empty</h3>
-                <p className="mt-2 text-foreground/55 text-sm">Add something to your ritual before checking out.</p>
+                <h3 className="font-display text-2xl" style={{ color: IVORY }}>Your cart is empty</h3>
+                <p className="mt-2 text-sm" style={{ color: MUTED }}>Add something to your ritual before checking out.</p>
                 <Link
                   to="/shop"
                   onClick={closeCheckout}
-                  className="mt-6 inline-flex h-12 px-7 items-center bg-greendark text-ivory text-[11px] font-semibold tracking-luxe-sm uppercase hover:bg-gold hover:text-greendark transition-colors"
+                  className="mt-6 inline-flex h-12 px-7 items-center rounded-full text-[11px] font-semibold tracking-luxe-sm uppercase transition-colors"
+                  style={{ backgroundColor: GOLD, color: INK }}
                 >
                   Explore the shop
                 </Link>
@@ -224,90 +306,176 @@ export default function CheckoutModal() {
                   exit={{ opacity: 0, x: -24 }}
                   transition={{ duration: 0.3 }}
                 >
-                                    {step === 0 && (
+                  {step === 0 && (
                     <div>
-                      <h3 className="font-display text-2xl text-greendark">Your items</h3>
+                      <h3 className="font-display text-2xl" style={{ color: IVORY }}>Order Summary</h3>
                       <div className="mt-5 space-y-3">
-                        {cartItems.map(({ id, variantId, variantLabel, qty, product, subtotal }) => (
-                          <div key={`${id}:${variantId || ''}`} className="flex items-center gap-4 p-4 bg-sand">
-                            <div className="h-14 w-14 shrink-0 bg-greendark/10 overflow-hidden flex items-center justify-center">
-                              {product.image ? (
-                                <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
+                        {/* FIXED: was reading product.image (a Base44
+                            placeholder URL) — now uses product.shopImage,
+                            the same real ABIXMART asset Cart.jsx uses. */}
+                        {cartItems.map(({ id, variantId, variantLabel, qty, product, unitPrice, subtotal }) => (
+                          <div
+                            key={`${id}:${variantId || ''}`}
+                            className="flex items-center gap-4 p-4 rounded-lg"
+                            style={{ backgroundColor: `${CARD}66`, border: `1px solid ${BORDER}` }}
+                          >
+                            <div
+                              className="h-14 w-14 shrink-0 rounded-md overflow-hidden flex items-center justify-center"
+                              style={{ backgroundColor: CARD }}
+                            >
+                              {product.shopImage ? (
+                                <img src={product.shopImage} alt={product.name} className="h-full w-full object-cover" />
                               ) : (
-                                <span className="font-display text-xl text-greendark/40">{product.name.charAt(0)}</span>
+                                <span className="font-display text-xl" style={{ color: MUTED }}>{product.name.charAt(0)}</span>
                               )}
                             </div>
-                            <div className="flex-1">
-                              <p className="font-display text-lg text-greendark leading-tight">{product.name}</p>
-                              <p className="text-sm text-foreground/55">{variantLabel ? `${variantLabel} · ` : ''}Qty {qty}</p>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-display text-lg leading-tight truncate" style={{ color: IVORY }}>{product.name}</p>
+                              <p className="text-sm" style={{ color: MUTED }}>
+                                {variantLabel ? `${variantLabel} · ` : ''}₹{unitPrice} × {qty}
+                              </p>
                             </div>
-                            <span className="font-price text-lg text-greendark">{product.currency}{subtotal}</span>
+                            <span className="text-lg shrink-0" style={{ color: IVORY }}>{product.currency}{subtotal}</span>
                           </div>
                         ))}
                       </div>
-                      <div className="mt-5 flex items-center justify-between border-t border-greendark/15 pt-4">
-                        <span className="text-sm text-foreground/55">Total</span>
-                        <span className="font-price text-2xl text-greendark">₹{total}</span>
+                      <div className="mt-5 flex items-center justify-between border-t pt-4" style={{ borderColor: BORDER }}>
+                        <span className="text-sm" style={{ color: MUTED }}>Subtotal</span>
+                        <span className="text-2xl" style={{ color: IVORY }}>₹{cartTotal}</span>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className="text-sm" style={{ color: MUTED }}>Shipping</span>
+                        <span className="text-sm" style={{ color: IVORY }}>{shipping === 0 ? 'Free' : `₹${shipping}`}</span>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between border-t pt-3" style={{ borderColor: BORDER }}>
+                        <span className="font-display text-lg" style={{ color: IVORY }}>Total</span>
+                        <span className="text-2xl" style={{ color: IVORY }}>₹{total}</span>
                       </div>
                     </div>
                   )}
 
                   {step === 1 && (
                     <div>
-                      <h3 className="font-display text-2xl text-greendark">Your details</h3>
-                      <div className="mt-6 space-y-4">
-                        <Field label="Full name">
-                          <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} placeholder="Your name" className="express-input" />
-                        </Field>
-                        <Field label="Email">
-                          <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@example.com" className="express-input" />
-                        </Field>
-                        <Field label="Phone number">
-                          <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/[^0-9]/g, '').slice(0, 10) })} inputMode="numeric" placeholder="10-digit mobile" className="express-input" />
-                        </Field>
+                      <h3 className="font-display text-2xl" style={{ color: IVORY }}>Delivery Information</h3>
+
+                      <div className="mt-5">
+                        <label className="text-[11px] uppercase tracking-luxe-sm block mb-1.5" style={{ color: MUTED }}>Email</label>
+                        <input
+                          type="email"
+                          value={form.email}
+                          onChange={(e) => setForm({ ...form, email: e.target.value })}
+                          placeholder="you@example.com"
+                          style={inputStyle}
+                        />
                       </div>
+
+                      {addressMode === 'saved' && savedInfoAvailable ? (
+                        <div className="mt-5 rounded-lg p-5" style={{ backgroundColor: `${CARD}66`, border: `1px solid ${BORDER}` }}>
+                          <p className="text-[11px] uppercase tracking-luxe-sm" style={{ color: MUTED }}>Delivery details</p>
+                          <p className="mt-2 text-base" style={{ color: IVORY }}>{form.fullName}</p>
+
+                          <div className="mt-1.5 flex items-center gap-3">
+                            {editingPhone ? (
+                              <input
+                                value={form.phone}
+                                onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/[^0-9]/g, '').slice(0, 10) })}
+                                inputMode="numeric"
+                                placeholder="10-digit mobile"
+                                style={{ ...inputStyle, height: '40px', maxWidth: '200px' }}
+                                autoFocus
+                              />
+                            ) : (
+                              <span className="text-base" style={{ color: IVORY }}>+91 {form.phone}</span>
+                            )}
+                            <button
+                              onClick={() => setEditingPhone((v) => !v)}
+                              className="inline-flex items-center gap-1 text-xs underline underline-offset-4"
+                              style={{ color: GOLD_LIGHT }}
+                            >
+                              <Pencil size={11} /> {editingPhone ? 'Done' : 'Change number'}
+                            </button>
+                          </div>
+
+                          <p className="mt-4 text-[11px] uppercase tracking-luxe-sm" style={{ color: MUTED }}>Saved address</p>
+                          <p className="mt-1.5 text-sm leading-relaxed" style={{ color: IVORY }}>{form.address}</p>
+                          <p className="text-sm" style={{ color: IVORY }}>{form.city}, {form.state} {form.pincode}</p>
+                          <p className="text-sm" style={{ color: IVORY }}>{form.country}</p>
+
+                          <button
+                            onClick={useAnotherAddress}
+                            className="mt-4 text-sm underline underline-offset-4"
+                            style={{ color: GOLD_LIGHT }}
+                          >
+                            + Add another address
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="mt-5 space-y-4">
+                          <Field label="Full name">
+                            <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} placeholder="Your name" style={inputStyle} />
+                          </Field>
+                          <Field label="Phone number">
+                            <input
+                              value={form.phone}
+                              onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/[^0-9]/g, '').slice(0, 10) })}
+                              inputMode="numeric"
+                              placeholder="10-digit mobile"
+                              style={inputStyle}
+                            />
+                          </Field>
+                          <Field label="Address">
+                            <textarea value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="House no, street, area" rows={3} style={textareaStyle} />
+                          </Field>
+                          <div className="grid grid-cols-2 gap-4">
+                            <Field label="City">
+                              <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="City" style={inputStyle} />
+                            </Field>
+                            <Field label="State">
+                              <input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} placeholder="State" style={inputStyle} />
+                            </Field>
+                            <Field label="Pincode">
+                              <input value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/[^0-9]/g, '').slice(0, 6) })} inputMode="numeric" placeholder="6-digit pincode" style={inputStyle} />
+                            </Field>
+                            <Field label="Country">
+                              <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="Country" style={inputStyle} />
+                            </Field>
+                          </div>
+
+                          {savedInfoAvailable && (
+                            <button
+                              onClick={useSavedAddress}
+                              className="text-sm underline underline-offset-4"
+                              style={{ color: GOLD_LIGHT }}
+                            >
+                              Use saved address instead
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {step === 2 && (
                     <div>
-                      <h3 className="font-display text-2xl text-greendark">Delivery address</h3>
-                      <div className="mt-6 space-y-4">
-                        <Field label="Address">
-                          <textarea value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="House no, street, area" rows={3} className="express-input resize-none" />
-                        </Field>
-                        <div className="grid grid-cols-2 gap-4">
-                          <Field label="City">
-                            <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="City" className="express-input" />
-                          </Field>
-                          <Field label="State">
-                            <input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} placeholder="State" className="express-input" />
-                          </Field>
-                          <Field label="Pincode">
-                            <input value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/[^0-9]/g, '').slice(0, 6) })} inputMode="numeric" placeholder="6-digit pincode" className="express-input" />
-                          </Field>
-                          <Field label="Country">
-                            <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="Country" className="express-input" />
-                          </Field>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {step === 3 && (
-                    <div>
-                      <h3 className="font-display text-2xl text-greendark">Payment method</h3>
-                      <p className="mt-2 text-foreground/55 text-sm">Payment gateway integration is coming soon. This is a prototype.</p>
+                      <h3 className="font-display text-2xl" style={{ color: IVORY }}>Payment method</h3>
+                      <p className="mt-2 text-sm" style={{ color: MUTED }}>Payment gateway integration is coming soon. This is a prototype.</p>
                       <div className="mt-6 space-y-3">
                         {['COD', 'UPI', 'Card'].map((m) => (
                           <button
                             key={m}
                             onClick={() => setForm({ ...form, payment: m })}
-                            className={`w-full flex items-center justify-between p-4 border transition-colors ${form.payment === m ? 'border-greendark bg-sand' : 'border-greendark/20 hover:border-greendark/40'}`}
+                            className="w-full flex items-center justify-between p-4 rounded-lg transition-colors"
+                            style={{
+                              border: `1px solid ${form.payment === m ? GOLD_LIGHT : BORDER_STRONG}`,
+                              backgroundColor: form.payment === m ? `${GOLD_LIGHT}14` : 'transparent',
+                            }}
                           >
-                            <span className="font-display text-lg text-greendark">{m === 'COD' ? 'Cash on Delivery' : m}</span>
-                            <span className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${form.payment === m ? 'border-greendark' : 'border-greendark/30'}`}>
-                              {form.payment === m && <span className="h-2.5 w-2.5 rounded-full bg-greendark" />}
+                            <span className="font-display text-lg" style={{ color: IVORY }}>{m === 'COD' ? 'Cash on Delivery' : m}</span>
+                            <span
+                              className="h-5 w-5 rounded-full border-2 flex items-center justify-center"
+                              style={{ borderColor: form.payment === m ? GOLD_LIGHT : BORDER_STRONG }}
+                            >
+                              {form.payment === m && <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: GOLD_LIGHT }} />}
                             </span>
                           </button>
                         ))}
@@ -315,24 +483,33 @@ export default function CheckoutModal() {
                     </div>
                   )}
 
-                  {step === 4 && (
+                  {step === 3 && (
                     <div>
-                      <h3 className="font-display text-2xl text-greendark">Confirm your order</h3>
+                      <h3 className="font-display text-2xl" style={{ color: IVORY }}>Confirm your order</h3>
                       <div className="mt-5 space-y-3 text-sm">
-                        {cartItems.map(({ id, qty, product }) => (
-                          <Row key={id} label={product.name} value={`Qty ${qty} · ₹${product.price * qty}`} />
+                        {/* FIXED: previously recomputed product.price × qty
+                            here, which silently overrode the correct
+                            ritual/package price. Now uses the same
+                            variant-aware unitPrice/subtotal as every
+                            other cart display. */}
+                        {cartItems.map(({ id, variantId, variantLabel, qty, unitPrice, subtotal, product }) => (
+                          <Row
+                            key={`${id}:${variantId || ''}`}
+                            label={`${product.name}${variantLabel ? ` — ${variantLabel}` : ''}`}
+                            value={`Qty ${qty} · ₹${subtotal}`}
+                          />
                         ))}
                         <Row label="Name" value={form.fullName} />
                         <Row label="Email" value={form.email} />
                         <Row label="Phone" value={form.phone} />
                         <Row label="Address" value={`${form.address}, ${form.city}, ${form.state} ${form.pincode}, ${form.country}`} />
                         <Row label="Payment" value={form.payment === 'COD' ? 'Cash on Delivery' : form.payment} />
-                        <div className="border-t border-greendark/15 pt-3 flex items-center justify-between">
-                          <span className="font-display text-lg text-greendark">Total</span>
-                          <span className="font-price text-2xl text-greendark">₹{total}</span>
+                        <div className="border-t pt-3 flex items-center justify-between" style={{ borderColor: BORDER }}>
+                          <span className="font-display text-lg" style={{ color: IVORY }}>Total</span>
+                          <span className="text-2xl" style={{ color: IVORY }}>₹{total}</span>
                         </div>
                       </div>
-                      {orderError && <p className="mt-4 text-sm text-destructive">{orderError}</p>}
+                      {orderError && <p className="mt-4 text-sm" style={{ color: '#F3A6A6' }}>{orderError}</p>}
                     </div>
                   )}
                 </motion.div>
@@ -345,7 +522,8 @@ export default function CheckoutModal() {
                   <button
                     onClick={next}
                     disabled={!canNext()}
-                    className="group w-full h-14 inline-flex items-center justify-center bg-greendark text-ivory text-[12px] font-semibold tracking-luxe-sm uppercase disabled:opacity-40 hover:bg-gold hover:text-greendark transition-colors duration-300"
+                    className="group w-full h-14 inline-flex items-center justify-center rounded-full text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors disabled:opacity-40"
+                    style={{ backgroundColor: GOLD, color: INK }}
                   >
                     Continue
                     <span className="ml-3 transition-transform duration-300 group-hover:translate-x-1">→</span>
@@ -354,7 +532,8 @@ export default function CheckoutModal() {
                   <button
                     onClick={placeOrder}
                     disabled={submitting}
-                    className="group w-full h-14 inline-flex items-center justify-center gap-2 bg-greendark text-ivory text-[12px] font-semibold tracking-luxe-sm uppercase disabled:opacity-60 hover:bg-gold hover:text-greendark transition-colors duration-300"
+                    className="group w-full h-14 inline-flex items-center justify-center gap-2 rounded-full text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors disabled:opacity-60"
+                    style={{ backgroundColor: GOLD, color: INK }}
                   >
                     {submitting ? (
                       <>
@@ -365,7 +544,7 @@ export default function CheckoutModal() {
                     )}
                   </button>
                 )}
-                <p className="mt-4 text-center text-xs text-foreground/40">
+                <p className="mt-4 text-center text-xs" style={{ color: MUTED }}>
                   Prototype checkout — no real payment is processed.
                 </p>
               </div>
@@ -380,8 +559,8 @@ export default function CheckoutModal() {
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="label-meta text-foreground/45">{label}</span>
-      <div className="mt-2">{children}</div>
+      <span className="text-[11px] uppercase tracking-luxe-sm" style={{ color: MUTED }}>{label}</span>
+      <div className="mt-1.5">{children}</div>
     </label>
   );
 }
@@ -389,8 +568,8 @@ function Field({ label, children }) {
 function Row({ label, value }) {
   return (
     <div className="flex justify-between gap-6">
-      <span className="text-foreground/50 shrink-0">{label}</span>
-      <span className="text-greendark text-right">{value}</span>
+      <span className="shrink-0" style={{ color: MUTED }}>{label}</span>
+      <span className="text-right" style={{ color: IVORY }}>{value}</span>
     </div>
   );
 }
@@ -399,19 +578,23 @@ function Confirmation({ orderId, form, total, cartItems, onClose }) {
   const itemCount = cartItems.reduce((n, c) => n + c.qty, 0);
   return (
     <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-6">
-      <div className="mx-auto h-20 w-20 rounded-full bg-greendark flex items-center justify-center mb-7">
-        <Check size={36} className="text-gold" />
+      <div className="mx-auto h-20 w-20 rounded-full flex items-center justify-center mb-7" style={{ backgroundColor: CARD }}>
+        <Check size={36} style={{ color: GOLD_LIGHT }} />
       </div>
-      <h3 className="font-display text-3xl text-greendark">Thank you, {form.fullName.split(' ')[0] || 'friend'}.</h3>
-      <p className="mt-3 text-foreground/60 max-w-xs mx-auto">
+      <h3 className="font-display text-3xl" style={{ color: IVORY }}>Thank you, {form.fullName.split(' ')[0] || 'friend'}.</h3>
+      <p className="mt-3 max-w-xs mx-auto" style={{ color: MUTED }}>
         Your order for {itemCount} item{itemCount > 1 ? 's' : ''} is confirmed. We'll text updates to {form.phone}.
       </p>
-      <div className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-sand text-greendark text-sm">
-        Order total <span className="font-price text-lg">₹{total}</span>
+      <div className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm" style={{ backgroundColor: CARD, color: IVORY }}>
+        Order total <span className="text-lg">₹{total}</span>
       </div>
-      {orderId && <p className="mt-3 text-xs text-foreground/40">Order reference: {orderId}</p>}
-      <p className="mt-5 text-xs text-foreground/40">A confirmation has been queued for the next phase.</p>
-      <button onClick={onClose} className="mt-8 h-12 px-8 border border-greendark text-greendark text-[11px] font-semibold tracking-luxe-sm uppercase hover:bg-greendark hover:text-ivory transition-colors">
+      {orderId && <p className="mt-3 text-xs" style={{ color: MUTED }}>Order reference: {orderId}</p>}
+      <p className="mt-5 text-xs" style={{ color: MUTED }}>A confirmation has been queued for the next phase.</p>
+      <button
+        onClick={onClose}
+        className="mt-8 h-12 px-8 rounded-full text-[11px] font-semibold tracking-luxe-sm uppercase transition-colors"
+        style={{ border: `1px solid ${BORDER_STRONG}`, color: IVORY }}
+      >
         Back to ABIXMART
       </button>
     </motion.div>
