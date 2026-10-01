@@ -18,15 +18,15 @@ import { ABIX } from '@/components/abix/brandColors';
 // CHANGED — "Details" and "Address" are merged into one "Delivery"
 // step that recognizes saved Profile information (name/phone/address)
 // and shows it for review instead of asking the user to retype it.
-// "+ Add another address" reveals the same editable fields as before
-// for a one-off delivery address, without touching the user's saved
-// Profile.
 //
-// CHANGED — Order confirmation now renders a snapshot of the order
-// that was just placed (taken BEFORE clearCart() runs), instead of
-// reading the live cart, which is empty by the time the confirmation
-// is shown. The placeholder "queued for the next phase" text and the
-// "we'll text updates" claim were removed — nothing sends texts.
+// CHANGED (this task) — customers with a saved address now get an
+// explicit choice: "Use your saved address" or "Use a different
+// address". After an order is placed, the delivery address is saved to
+// the existing profile document (via updateUserProfile) so it shows in
+// Profile → Addresses and is offered on the next checkout.
+//
+// CHANGED — Order confirmation renders a snapshot of the order that was
+// just placed (taken BEFORE clearCart() runs).
 //
 // No Firebase/order-creation/payment logic changed: createOrder(),
 // its argument shape, and cartItems/cartTotal all come from the same
@@ -62,9 +62,15 @@ function hasSavedDeliveryInfo(profile) {
   );
 }
 
+// The account has ONE saved address (the profile document fields).
+// When a customer uses a different address, it replaces the saved one
+// after the order if this is true. Set to false to only auto-save the
+// FIRST address and never overwrite it from checkout.
+const SAVE_NEW_ADDRESS_AS_DEFAULT = true;
+
 export default function CheckoutModal() {
   const { checkoutOpen, closeCheckout, cartItems, cartTotal, clearCart } = useShop();
-  const { user, profile } = useAuth();
+  const { user, profile, updateUserProfile } = useAuth();
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
@@ -73,14 +79,14 @@ export default function CheckoutModal() {
     payment: 'COD',
   });
   // 'saved' shows the read-only saved-profile card; 'new' reveals the
-  // editable address form (either because the user chose "Add another
-  // address", or because there's no usable saved info yet).
+  // editable address form (either because the user chose "Use a
+  // different address", or because there's no usable saved info yet).
   const [addressMode, setAddressMode] = useState('saved');
   const [editingPhone, setEditingPhone] = useState(false);
   const [placed, setPlaced] = useState(false);
-  // CHANGED: was `placedOrderId` (a string). Now holds a snapshot of the
-  // whole order that was just created, so the confirmation can show the
-  // real items/total even after the cart has been cleared.
+  // Snapshot of the whole order that was just created, so the
+  // confirmation can show the real items/total even after the cart
+  // has been cleared.
   const [placedOrder, setPlacedOrder] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [orderError, setOrderError] = useState('');
@@ -205,7 +211,31 @@ export default function CheckoutModal() {
         paymentMethod: form.payment,
       });
 
-      // CHANGED: snapshot the order BEFORE the cart is cleared, so the
+      // Save the delivery address to the account. Best-effort: a failure
+      // here must never block or undo an order that was already placed.
+      const shouldSaveAddress =
+        !savedInfoAvailable || (addressMode === 'new' && SAVE_NEW_ADDRESS_AS_DEFAULT);
+      if (shouldSaveAddress && typeof updateUserProfile === 'function') {
+        try {
+          const addressUpdate = {
+            address: form.address.trim(),
+            city: form.city.trim(),
+            state: form.state.trim(),
+            pincode: form.pincode.trim(),
+            country: form.country.trim(),
+          };
+          // Recipient name/phone only fill gaps; they never overwrite the
+          // account holder's own name/phone.
+          if (!profile?.fullName) addressUpdate.fullName = form.fullName.trim();
+          if (!profile?.phone) addressUpdate.phone = form.phone.trim();
+          await updateUserProfile(addressUpdate);
+        } catch (saveErr) {
+          // eslint-disable-next-line no-console
+          console.error('[ABIXMART] Could not save address to profile', saveErr?.code, saveErr?.message, saveErr);
+        }
+      }
+
+      // Snapshot the order BEFORE the cart is cleared, so the
       // confirmation screen shows what was actually ordered. Cart is
       // still cleared only AFTER Firestore confirms the order — a
       // failed write above leaves it completely untouched.
@@ -387,6 +417,24 @@ export default function CheckoutModal() {
                         />
                       </div>
 
+                      {/* Explicit choice shown whenever the customer already has a saved address. */}
+                      {savedInfoAvailable && (
+                        <div className="mt-5 space-y-3">
+                          <AddressChoice
+                            selected={addressMode === 'saved'}
+                            title="Use your saved address"
+                            actionLabel="Use saved address"
+                            onSelect={addressMode === 'saved' ? undefined : useSavedAddress}
+                          />
+                          <AddressChoice
+                            selected={addressMode === 'new'}
+                            title="Use a different address"
+                            actionLabel="Enter a new address"
+                            onSelect={addressMode === 'new' ? undefined : useAnotherAddress}
+                          />
+                        </div>
+                      )}
+
                       {addressMode === 'saved' && savedInfoAvailable ? (
                         <div className="mt-5 rounded-lg p-5" style={{ backgroundColor: `${CARD}66`, border: `1px solid ${BORDER}` }}>
                           <p className="text-[11px] uppercase tracking-luxe-sm" style={{ color: MUTED }}>Delivery details</p>
@@ -418,14 +466,6 @@ export default function CheckoutModal() {
                           <p className="mt-1.5 text-sm leading-relaxed" style={{ color: IVORY }}>{form.address}</p>
                           <p className="text-sm" style={{ color: IVORY }}>{form.city}, {form.state} {form.pincode}</p>
                           <p className="text-sm" style={{ color: IVORY }}>{form.country}</p>
-
-                          <button
-                            onClick={useAnotherAddress}
-                            className="mt-4 text-sm underline underline-offset-4"
-                            style={{ color: GOLD_LIGHT }}
-                          >
-                            + Add another address
-                          </button>
                         </div>
                       ) : (
                         <div className="mt-5 space-y-4">
@@ -458,16 +498,6 @@ export default function CheckoutModal() {
                               <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="Country" style={inputStyle} />
                             </Field>
                           </div>
-
-                          {savedInfoAvailable && (
-                            <button
-                              onClick={useSavedAddress}
-                              className="text-sm underline underline-offset-4"
-                              style={{ color: GOLD_LIGHT }}
-                            >
-                              Use saved address instead
-                            </button>
-                          )}
                         </div>
                       )}
                     </div>
@@ -592,7 +622,36 @@ function Row({ label, value }) {
   );
 }
 
-// CHANGED: renders the snapshot of the order that was just placed
+// Radio-style option used for the saved / different address choice.
+// Same look as the payment-method options in step 2.
+function AddressChoice({ selected, title, actionLabel, onSelect }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="w-full flex items-center justify-between p-4 rounded-lg text-left transition-colors"
+      style={{
+        border: `1px solid ${selected ? GOLD_LIGHT : BORDER_STRONG}`,
+        backgroundColor: selected ? `${GOLD_LIGHT}14` : 'transparent',
+      }}
+    >
+      <span>
+        <span className="block font-display text-lg" style={{ color: IVORY }}>{title}</span>
+        <span className="block mt-0.5 text-[11px] uppercase tracking-luxe-sm" style={{ color: MUTED }}>
+          {selected ? 'Selected' : actionLabel}
+        </span>
+      </span>
+      <span
+        className="h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0"
+        style={{ borderColor: selected ? GOLD_LIGHT : BORDER_STRONG }}
+      >
+        {selected && <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: GOLD_LIGHT }} />}
+      </span>
+    </button>
+  );
+}
+
+// Renders the snapshot of the order that was just placed
 // (items, total, reference, contact) instead of the live — now empty —
 // cart. No texting/"next phase" claims: nothing in the project sends
 // SMS or WhatsApp confirmations.

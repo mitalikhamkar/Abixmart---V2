@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   LogOut, ShieldCheck, RefreshCw, Package, MapPin, Heart, Users,
-  Facebook, MessageCircle, Instagram, Send, Pencil, Check as CheckIcon, X as XIcon,
+  Facebook, MessageCircle, Instagram, Linkedin, Send, Pencil, Check as CheckIcon, X as XIcon,
 } from 'lucide-react';
 import PageTransition from '@/components/abix/PageTransition';
 import { useAuth } from '@/lib/AuthContext';
+import { useShop } from '@/lib/ShopContext';
+import { products } from '@/data/products';
 import { getOrdersForUser, getDisplayOrderId } from '@/lib/orderUtils';
 import mineralBg from '@/assets/shilajit-steps/himalayaBG.png';
 import logo from '@/assets/logo/Abixmart-header.png';
@@ -42,14 +44,15 @@ const SPACE_SECTIONS = [
     key: 'community',
     label: 'Community',
     icon: Users,
-    heading: 'The ABIXMART Circle',
+    heading: 'Join the ABIXMART Circle',
     body: 'Stay connected with the community around better everyday rituals.',
     cta: null,
     social: [
-      { icon: Facebook, label: 'Facebook' },
-      { icon: MessageCircle, label: 'WhatsApp' },
-      { icon: Instagram, label: 'Instagram' },
-      { icon: Send, label: 'Telegram' },
+      { icon: Facebook, label: 'Facebook', href: 'https://www.facebook.com/profile.php?id=6159343745872' },
+      { icon: MessageCircle, label: 'WhatsApp', href: 'https://wa.me/917680014597' },
+      { icon: Instagram, label: 'Instagram', href: 'https://www.instagram.com/abixmart/' },
+      { icon: Linkedin, label: 'LinkedIn', href: 'https://www.linkedin.com/company/abixmart/posts/' },
+      { icon: Send, label: 'Telegram', href: null }, // real URL not provided yet — stays "Coming soon"
     ],
   },
 ];
@@ -200,13 +203,13 @@ function OrdersPanel({ user, navigate }) {
               className="border border-ivory/10 bg-ivory/5 backdrop-blur-sm rounded-lg px-5 py-4"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-  <span className="font-sans text-base sm:text-lg font-medium text-ivory tracking-wide lining-nums tabular-nums select-all">
-    {displayId}
-  </span>
-  <span className="label-meta text-gold-light">
-    {STATUS_LABELS[order.orderStatus] || order.orderStatus || 'Placed'}
-  </span>
-</div>
+                <span className="font-sans text-base sm:text-lg font-medium text-ivory tracking-wide lining-nums tabular-nums select-all">
+                  {displayId}
+                </span>
+                <span className="label-meta text-gold-light">
+                  {STATUS_LABELS[order.orderStatus] || order.orderStatus || 'Placed'}
+                </span>
+              </div>
 
               <p className="mt-1 text-xs text-ivory/40">{formatOrderDate(order.createdAt)}</p>
 
@@ -248,8 +251,121 @@ function OrdersPanel({ user, navigate }) {
   );
 }
 
+// NEW: Profile → Addresses. Reads the same profile fields checkout
+// uses (address / city / state / pincode / country), so whatever is
+// saved after an order shows up here.
+function AddressesPanel({ profile, onEdit }) {
+  const hasAddress = Boolean(profile?.address && profile?.city && profile?.state && profile?.pincode);
+
+  if (!hasAddress) {
+    return (
+      <div className="max-w-xl">
+        <MapPin size={22} className="text-gold-light" />
+        <h2 className="mt-4 font-display text-2xl text-ivory">Delivery Addresses</h2>
+        <p className="mt-2 text-ivory/55 leading-relaxed">
+          Save your preferred delivery address for a faster checkout.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-xl">
+      <MapPin size={22} className="text-gold-light" />
+      <h2 className="mt-4 font-display text-2xl text-ivory">Delivery Addresses</h2>
+      <p className="mt-2 text-ivory/55 leading-relaxed">Your saved address is used for a faster checkout.</p>
+
+      <div className="mt-6 border border-ivory/10 bg-ivory/5 backdrop-blur-sm rounded-lg px-5 py-4">
+        <span className="label-meta text-ivory/40">Saved address</span>
+        {profile?.fullName && <p className="mt-2 text-base text-ivory">{profile.fullName}</p>}
+        {profile?.phone && <p className="text-sm text-ivory/70">+91 {profile.phone}</p>}
+        <p className="mt-2 text-sm text-ivory/80 leading-relaxed">{profile.address}</p>
+        <p className="text-sm text-ivory/80">{profile.city}, {profile.state} {profile.pincode}</p>
+        {profile?.country && <p className="text-sm text-ivory/80">{profile.country}</p>}
+      </div>
+
+      <button
+        onClick={onEdit}
+        className="mt-5 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-luxe-sm text-ivory/60 hover:text-ivory transition-colors border border-ivory/15 hover:border-ivory/30 rounded-full px-3.5 py-2"
+      >
+        <Pencil size={12} />
+        Edit address
+      </button>
+    </div>
+  );
+}
+
+// NEW: Profile → Wishlist. Reads the SAME wishlist (array of product
+// ids) from useShop() that the header and the /wishlist page use, so
+// all three stay in sync. No new collection, no duplicate logic.
+function WishlistPanel({ wishlist, toggleWishlist, navigate }) {
+  const items = (wishlist || []).map((id) => products.find((p) => p.id === id)).filter(Boolean);
+
+  if (items.length === 0) {
+    return (
+      <div className="max-w-xl">
+        <Heart size={22} className="text-gold-light" />
+        <h2 className="mt-4 font-display text-2xl text-ivory">Your Wishlist</h2>
+        <p className="mt-2 text-ivory/55 leading-relaxed">
+          Products you save for your next ritual will appear here.
+        </p>
+        <button onClick={() => navigate('/shop')} className="btn-primary-inverse mt-6">
+          Browse Shop
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl">
+      <h2 className="font-display text-2xl text-ivory">Your Wishlist</h2>
+      <div className="mt-6 space-y-3">
+        {items.map((product) => (
+          <div
+            key={product.id}
+            className="flex items-center gap-4 border border-ivory/10 bg-ivory/5 backdrop-blur-sm rounded-lg px-4 py-3"
+          >
+            <button
+              onClick={() => navigate(`/shop/${product.slug}`)}
+              className="h-16 w-16 shrink-0 rounded-md bg-ivory/5 flex items-center justify-center overflow-hidden"
+              aria-label={`View ${product.name}`}
+            >
+              {product.shopImage && (
+                <img src={product.shopImage} alt={product.name} className="h-full w-full object-contain p-1" />
+              )}
+            </button>
+
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-lg leading-tight text-ivory truncate">{product.name}</p>
+              <p className="mt-0.5 text-sm text-ivory/60">
+                {product.status === 'available' ? `${product.currency}${product.price}` : 'Coming Soon'}
+              </p>
+              <button
+                onClick={() => navigate(`/shop/${product.slug}`)}
+                className="mt-1.5 text-[11px] uppercase tracking-luxe-sm text-gold-light hover:text-ivory transition-colors"
+              >
+                View product
+              </button>
+            </div>
+
+            <button
+              onClick={() => toggleWishlist(product.id)}
+              aria-label="Remove from wishlist"
+              className="h-8 w-8 shrink-0 inline-flex items-center justify-center rounded-full border border-ivory/15 text-ivory/60 hover:text-ivory hover:border-ivory/30 transition-colors"
+            >
+              <XIcon size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Account() {
   const { user, profile, loading, logout, resendVerification, refreshUser, updateUserProfile } = useAuth();
+  // Same wishlist source of truth as the header and /wishlist page.
+  const { wishlist, toggleWishlist } = useShop();
   const navigate = useNavigate();
 
   const isGoogleUser =
@@ -691,12 +807,27 @@ export default function Account() {
               </div>
             )}
 
-            {/* CHANGED: 'orders' is now handled by the real, Firestore-backed
-                OrdersPanel above instead of the generic static SPACE_SECTIONS
-                card. Addresses/Wishlist/Community are untouched. */}
+            {/* Orders, Addresses and Wishlist are real, data-backed panels.
+                Community (and any other section) uses the generic renderer below. */}
             {activeSection === 'orders' && <OrdersPanel user={user} navigate={navigate} />}
 
-            {SPACE_SECTIONS.filter((s) => s.key === activeSection && s.key !== 'orders').map((section) => (
+            {activeSection === 'addresses' && (
+              <AddressesPanel
+                profile={profile}
+                onEdit={() => {
+                  setActiveSection('profile');
+                  startEditing();
+                }}
+              />
+            )}
+
+            {activeSection === 'wishlist' && (
+              <WishlistPanel wishlist={wishlist} toggleWishlist={toggleWishlist} navigate={navigate} />
+            )}
+
+            {SPACE_SECTIONS.filter(
+              (s) => s.key === activeSection && !['orders', 'addresses', 'wishlist'].includes(s.key)
+            ).map((section) => (
               <div key={section.key} className="max-w-xl">
                 <section.icon size={22} className="text-gold-light" />
                 <h2 className="mt-4 font-display text-2xl text-ivory">{section.heading}</h2>
@@ -710,15 +841,30 @@ export default function Account() {
 
                 {section.social && (
                   <div className="mt-6 flex flex-wrap gap-3">
-                    {section.social.map(({ icon: Icon, label }) => (
-                      <span
-                        key={label}
-                        className="inline-flex items-center gap-2 border border-ivory/15 px-4 py-2.5 text-sm text-ivory/60"
-                      >
-                        <Icon size={15} />
-                        {label}
-                      </span>
-                    ))}
+                    {section.social.map(({ icon: Icon, label, href }) =>
+                      href ? (
+                        <a
+                          key={label}
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 border border-ivory/15 hover:border-ivory/35 px-4 py-2.5 text-sm text-ivory/60 hover:text-ivory transition-colors"
+                        >
+                          <Icon size={15} />
+                          {label}
+                        </a>
+                      ) : (
+                        <span
+                          key={label}
+                          aria-disabled="true"
+                          className="inline-flex items-center gap-2 border border-ivory/10 px-4 py-2.5 text-sm text-ivory/30 cursor-not-allowed"
+                        >
+                          <Icon size={15} />
+                          {label}
+                          <span className="label-meta text-ivory/30">Coming soon</span>
+                        </span>
+                      )
+                    )}
                   </div>
                 )}
               </div>
