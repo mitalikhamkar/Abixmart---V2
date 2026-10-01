@@ -22,6 +22,12 @@ import { ABIX } from '@/components/abix/brandColors';
 // for a one-off delivery address, without touching the user's saved
 // Profile.
 //
+// CHANGED — Order confirmation now renders a snapshot of the order
+// that was just placed (taken BEFORE clearCart() runs), instead of
+// reading the live cart, which is empty by the time the confirmation
+// is shown. The placeholder "queued for the next phase" text and the
+// "we'll text updates" claim were removed — nothing sends texts.
+//
 // No Firebase/order-creation/payment logic changed: createOrder(),
 // its argument shape, and cartItems/cartTotal all come from the same
 // places they did before.
@@ -72,7 +78,10 @@ export default function CheckoutModal() {
   const [addressMode, setAddressMode] = useState('saved');
   const [editingPhone, setEditingPhone] = useState(false);
   const [placed, setPlaced] = useState(false);
-  const [placedOrderId, setPlacedOrderId] = useState(null);
+  // CHANGED: was `placedOrderId` (a string). Now holds a snapshot of the
+  // whole order that was just created, so the confirmation can show the
+  // real items/total even after the cart has been cleared.
+  const [placedOrder, setPlacedOrder] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [orderError, setOrderError] = useState('');
 
@@ -82,7 +91,7 @@ export default function CheckoutModal() {
     if (checkoutOpen) {
       setStep(0);
       setPlaced(false);
-      setPlacedOrderId(null);
+      setPlacedOrder(null);
       setOrderError('');
       setEditingPhone(false);
       setAddressMode(hasSavedDeliveryInfo(profile) ? 'saved' : 'new');
@@ -196,10 +205,19 @@ export default function CheckoutModal() {
         paymentMethod: form.payment,
       });
 
-      // Cart is cleared only AFTER Firestore confirms the order — a
-      // failed write below leaves it completely untouched.
+      // CHANGED: snapshot the order BEFORE the cart is cleared, so the
+      // confirmation screen shows what was actually ordered. Cart is
+      // still cleared only AFTER Firestore confirms the order — a
+      // failed write above leaves it completely untouched.
+      setPlacedOrder({
+        orderId,
+        fullName: form.fullName.trim(),
+        phone: form.phone.trim(),
+        total,
+        items,
+        itemCount: items.reduce((n, it) => n + it.qty, 0),
+      });
       clearCart();
-      setPlacedOrderId(orderId);
       setPlaced(true);
     } catch (err) {
       // eslint-disable-next-line no-console
@@ -296,7 +314,7 @@ export default function CheckoutModal() {
                 </Link>
               </div>
             ) : placed ? (
-              <Confirmation orderId={placedOrderId} form={form} total={total} cartItems={cartItems} onClose={closeCheckout} />
+              <Confirmation order={placedOrder} onClose={closeCheckout} />
             ) : (
               <AnimatePresence mode="wait">
                 <motion.div
@@ -574,22 +592,55 @@ function Row({ label, value }) {
   );
 }
 
-function Confirmation({ orderId, form, total, cartItems, onClose }) {
-  const itemCount = cartItems.reduce((n, c) => n + c.qty, 0);
+// CHANGED: renders the snapshot of the order that was just placed
+// (items, total, reference, contact) instead of the live — now empty —
+// cart. No texting/"next phase" claims: nothing in the project sends
+// SMS or WhatsApp confirmations.
+function Confirmation({ order, onClose }) {
+  if (!order) return null;
+  const { orderId, fullName, phone, total, items, itemCount } = order;
+
   return (
     <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-6">
       <div className="mx-auto h-20 w-20 rounded-full flex items-center justify-center mb-7" style={{ backgroundColor: CARD }}>
         <Check size={36} style={{ color: GOLD_LIGHT }} />
       </div>
-      <h3 className="font-display text-3xl" style={{ color: IVORY }}>Thank you, {form.fullName.split(' ')[0] || 'friend'}.</h3>
+      <h3 className="font-display text-3xl" style={{ color: IVORY }}>
+        Thank you, {(fullName || '').split(' ')[0] || 'friend'}.
+      </h3>
       <p className="mt-3 max-w-xs mx-auto" style={{ color: MUTED }}>
-        Your order for {itemCount} item{itemCount > 1 ? 's' : ''} is confirmed. We'll text updates to {form.phone}.
+        Your order for {itemCount} item{itemCount === 1 ? '' : 's'} has been placed.
       </p>
+
+      <div className="mt-5 mx-auto max-w-xs space-y-1.5 text-sm">
+        {items.map((it, i) => (
+          <div key={i} className="flex justify-between gap-4">
+            <span className="text-left" style={{ color: IVORY }}>
+              {it.name}{it.variantLabel ? ` — ${it.variantLabel}` : ''} × {it.qty}
+            </span>
+            <span className="shrink-0" style={{ color: MUTED }}>₹{it.subtotal}</span>
+          </div>
+        ))}
+      </div>
+
       <div className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm" style={{ backgroundColor: CARD, color: IVORY }}>
         Order total <span className="text-lg">₹{total}</span>
       </div>
-      {orderId && <p className="mt-3 text-xs" style={{ color: MUTED }}>Order reference: {orderId}</p>}
-      <p className="mt-5 text-xs" style={{ color: MUTED }}>A confirmation has been queued for the next phase.</p>
+
+      {orderId && (
+        <p className="mt-4 text-xs lining-nums tabular-nums" style={{ color: MUTED }}>
+          Order reference: <span className="select-all" style={{ color: IVORY }}>{orderId}</span>
+        </p>
+      )}
+      {phone && (
+        <p className="mt-1.5 text-xs" style={{ color: MUTED }}>
+          Contact number on this order: {phone}
+        </p>
+      )}
+      <p className="mt-5 text-xs max-w-xs mx-auto" style={{ color: MUTED }}>
+        You can follow this order any time from Profile → Orders.
+      </p>
+
       <button
         onClick={onClose}
         className="mt-8 h-12 px-8 rounded-full text-[11px] font-semibold tracking-luxe-sm uppercase transition-colors"

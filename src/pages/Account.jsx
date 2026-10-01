@@ -200,11 +200,13 @@ function OrdersPanel({ user, navigate }) {
               className="border border-ivory/10 bg-ivory/5 backdrop-blur-sm rounded-lg px-5 py-4"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-display text-lg text-ivory">{displayId}</span>
-                <span className="label-meta text-gold-light">
-                  {STATUS_LABELS[order.orderStatus] || order.orderStatus || 'Placed'}
-                </span>
-              </div>
+  <span className="font-sans text-base sm:text-lg font-medium text-ivory tracking-wide lining-nums tabular-nums select-all">
+    {displayId}
+  </span>
+  <span className="label-meta text-gold-light">
+    {STATUS_LABELS[order.orderStatus] || order.orderStatus || 'Placed'}
+  </span>
+</div>
 
               <p className="mt-1 text-xs text-ivory/40">{formatOrderDate(order.createdAt)}</p>
 
