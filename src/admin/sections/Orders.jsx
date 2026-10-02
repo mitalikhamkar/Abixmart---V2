@@ -3,6 +3,7 @@ import { Package, ChevronDown } from 'lucide-react';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { adminDb } from '@/admin/lib/adminFirebase';
 import { useAdminCollection } from '@/admin/hooks/useAdminCollection';
+import PageHeader from '@/admin/components/PageHeader';
 import { LoadingState, ErrorState, EmptyState } from '@/admin/components/StateViews';
 import StatusBadge from '@/admin/components/StatusBadge';
 import { formatDateTime } from '@/admin/utils/format';
@@ -23,7 +24,9 @@ function millis(value) {
 }
 
 function money(value) {
-  return value === undefined || value === null ? '—' : `₹${value}`;
+  if (value === undefined || value === null) return '—';
+  const n = Number(value);
+  return Number.isFinite(n) ? `₹${n.toLocaleString('en-IN')}` : `₹${value}`;
 }
 
 function paymentMethodLabel(method) {
@@ -35,11 +38,11 @@ function statusLabel(value) {
   return String(value).replace(/_/g, ' ');
 }
 
-function DetailRow({ label, children }) {
+function DetailRow({ label, control, children }) {
   return (
-    <div className="flex items-start justify-between gap-6 border-b border-charcoal/8 pb-2">
-      <dt className="label-meta text-charcoal/45 shrink-0 pt-1.5">{label}</dt>
-      <dd className="text-sm text-charcoal text-right min-w-0 break-words">{children}</dd>
+    <div className={control ? 'is-control' : undefined}>
+      <dt>{label}</dt>
+      <dd>{children}</dd>
     </div>
   );
 }
@@ -52,13 +55,13 @@ function StatusSelect({ value, options, onChange, disabled, saving }) {
   const current = value || '';
   const hasCurrent = current && options.includes(current);
   return (
-    <div className="flex items-center justify-end gap-2">
-      {saving && <span className="text-xs text-charcoal/45">Saving…</span>}
+    <div className="adm-control">
+      {saving && <span className="adm-saving">Saving…</span>}
       <select
         value={current}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="h-9 px-2.5 border border-charcoal/15 bg-ivory text-xs text-charcoal rounded-md focus:outline-none focus:border-resin capitalize disabled:opacity-50"
+        className="adm-select adm-select--sm"
       >
         {!current && (
           <option value="" disabled>
@@ -126,11 +129,8 @@ export default function Orders() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="label-meta text-charcoal/40">ABIXMART Admin</p>
-        <h1 className="mt-2 font-display text-3xl text-charcoal">Orders</h1>
-      </div>
+    <div className="adm-page">
+      <PageHeader title="Orders" />
 
       {loading ? (
         <LoadingState label="Loading orders…" />
@@ -139,7 +139,7 @@ export default function Orders() {
       ) : orders.length === 0 ? (
         <EmptyState icon={Package} title="No orders yet" body="Orders placed through the website checkout will appear here." />
       ) : (
-        <div className="border border-charcoal/10 bg-ivory rounded-md divide-y divide-charcoal/8 overflow-hidden">
+        <div className="adm-list">
           {orders.map((o) => {
             const displayOrderId = getDisplayOrderId(o);
             const customerName = o.customer?.fullName || o.customerName || '—';
@@ -158,114 +158,119 @@ export default function Orders() {
                 <button
                   type="button"
                   onClick={() => setExpandedId(open ? null : o.id)}
-                  className="w-full text-left p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 hover:bg-charcoal/[0.02]"
+                  className="adm-row adm-row-btn"
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-charcoal font-medium lining-nums tabular-nums">{displayOrderId}</p>
-                    <p className="text-sm text-charcoal/50 truncate">
+                  <div className="adm-row-main">
+                    <p className="adm-row-title adm-mono">{displayOrderId}</p>
+                    <p className="adm-row-sub">
                       {customerName}
                       {customerEmail ? ` • ${customerEmail}` : ''}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0 flex-wrap">
-                    <span className="font-price text-charcoal">{money(total)}</span>
-                    <span className="text-xs text-charcoal/40">{formatDateTime(o.createdAt)}</span>
-                    {orderStatus ? <StatusBadge status={orderStatus} /> : <span className="text-xs text-charcoal/40">—</span>}
+                  <div className="adm-row-aside">
+                    <span className="font-price" style={{ color: 'var(--adm-text)' }}>{money(total)}</span>
+                    <span className="adm-row-meta">{formatDateTime(o.createdAt)}</span>
+                    {orderStatus ? <StatusBadge status={orderStatus} /> : <span className="adm-row-meta">—</span>}
                     {o.paymentStatus && <StatusBadge status={o.paymentStatus} kind="payment" />}
-                    <ChevronDown
-                      size={16}
-                      className={`text-charcoal/40 transition-transform ${open ? 'rotate-180' : ''}`}
-                    />
+                    <ChevronDown size={16} className={`adm-chev ${open ? 'is-open' : ''}`} />
                   </div>
                 </button>
 
                 {open && (
-                  <div className="px-4 sm:px-5 pb-5 grid gap-6 md:grid-cols-2">
+                  <div className="adm-detail">
                     <div>
-                      <span className="label-meta text-charcoal/35 block">Order</span>
-                      <dl className="mt-2 space-y-3">
-                        <DetailRow label="Order ID">
-                          <span className="lining-nums tabular-nums select-all">{displayOrderId}</span>
-                        </DetailRow>
-                        <DetailRow label="Placed">{formatDateTime(o.createdAt)}</DetailRow>
-                        <DetailRow label="Updated">{formatDateTime(o.updatedAt)}</DetailRow>
-                      </dl>
+                      <div className="adm-detail-section">
+                        <span className="adm-label">Order</span>
+                        <dl className="adm-kv">
+                          <DetailRow label="Order ID">
+                            <span className="adm-mono" style={{ userSelect: 'all' }}>{displayOrderId}</span>
+                          </DetailRow>
+                          <DetailRow label="Placed">{formatDateTime(o.createdAt)}</DetailRow>
+                          <DetailRow label="Updated">{formatDateTime(o.updatedAt)}</DetailRow>
+                        </dl>
+                      </div>
 
-                      <span className="label-meta text-charcoal/35 mt-6 block">Customer</span>
-                      <dl className="mt-2 space-y-3">
-                        <DetailRow label="Name">{customerName}</DetailRow>
-                        <DetailRow label="Email">{customerEmail || '—'}</DetailRow>
-                        <DetailRow label="Phone">{customerPhone || '—'}</DetailRow>
-                      </dl>
+                      <div className="adm-detail-section">
+                        <span className="adm-label">Customer</span>
+                        <dl className="adm-kv">
+                          <DetailRow label="Name">{customerName}</DetailRow>
+                          <DetailRow label="Email">{customerEmail || '—'}</DetailRow>
+                          <DetailRow label="Phone">{customerPhone || '—'}</DetailRow>
+                        </dl>
+                      </div>
 
-                      <span className="label-meta text-charcoal/35 mt-6 block">Shipping address</span>
-                      <dl className="mt-2 space-y-3">
-                        <DetailRow label="Address">{addr?.address || '—'}</DetailRow>
-                        <DetailRow label="City">{addr?.city || '—'}</DetailRow>
-                        <DetailRow label="State">{addr?.state || '—'}</DetailRow>
-                        <DetailRow label="Pincode">{addr?.pincode || '—'}</DetailRow>
-                        <DetailRow label="Country">{addr?.country || '—'}</DetailRow>
-                      </dl>
+                      <div className="adm-detail-section">
+                        <span className="adm-label">Shipping address</span>
+                        <dl className="adm-kv">
+                          <DetailRow label="Address">{addr?.address || '—'}</DetailRow>
+                          <DetailRow label="City">{addr?.city || '—'}</DetailRow>
+                          <DetailRow label="State">{addr?.state || '—'}</DetailRow>
+                          <DetailRow label="Pincode">{addr?.pincode || '—'}</DetailRow>
+                          <DetailRow label="Country">{addr?.country || '—'}</DetailRow>
+                        </dl>
+                      </div>
                     </div>
 
                     <div>
-                      <span className="label-meta text-charcoal/35 block">Items</span>
-                      <div className="mt-2 space-y-3">
-                        {items.length === 0 ? (
-                          <p className="text-sm text-charcoal/50">—</p>
-                        ) : (
-                          items.map((it, i) => (
-                            <div key={`${it.productId || 'item'}-${it.variantId || ''}-${i}`} className="flex items-start justify-between gap-4 border-b border-charcoal/8 pb-2">
-                              <div className="min-w-0">
-                                <p className="text-sm text-charcoal">
-                                  {it.name || it.productId || 'Item'}
-                                  {it.variantLabel ? ` — ${it.variantLabel}` : ''}
-                                </p>
-                                <p className="text-xs text-charcoal/45">
-                                  Qty {it.qty ?? '—'} × {money(it.unitPrice)}
-                                </p>
+                      <div className="adm-detail-section">
+                        <span className="adm-label">Items</span>
+                        <div>
+                          {items.length === 0 ? (
+                            <p className="adm-item-sub" style={{ padding: '0.6rem 0' }}>—</p>
+                          ) : (
+                            items.map((it, i) => (
+                              <div key={`${it.productId || 'item'}-${it.variantId || ''}-${i}`} className="adm-item">
+                                <div className="min-w-0">
+                                  <p className="adm-item-name">
+                                    {it.name || it.productId || 'Item'}
+                                    {it.variantLabel ? ` — ${it.variantLabel}` : ''}
+                                  </p>
+                                  <p className="adm-item-sub">
+                                    Qty {it.qty ?? '—'} × {money(it.unitPrice)}
+                                  </p>
+                                </div>
+                                <span className="adm-item-name" style={{ flexShrink: 0 }}>{money(it.subtotal)}</span>
                               </div>
-                              <span className="text-sm text-charcoal shrink-0">{money(it.subtotal)}</span>
-                            </div>
-                          ))
-                        )}
+                            ))
+                          )}
+                        </div>
                       </div>
 
-                      <span className="label-meta text-charcoal/35 mt-6 block">Payment</span>
-                      <dl className="mt-2 space-y-3">
-                        <DetailRow label="Subtotal">{money(o.subtotal)}</DetailRow>
-                        <DetailRow label="Shipping">{o.shipping === 0 ? 'Free' : money(o.shipping)}</DetailRow>
-                        <DetailRow label="Total">{money(total)}</DetailRow>
-                        <DetailRow label="Method">{paymentMethodLabel(o.paymentMethod)}</DetailRow>
-                      </dl>
+                      <div className="adm-detail-section">
+                        <span className="adm-label">Payment</span>
+                        <dl className="adm-kv">
+                          <DetailRow label="Subtotal">{money(o.subtotal)}</DetailRow>
+                          <DetailRow label="Shipping">{o.shipping === 0 ? 'Free' : money(o.shipping)}</DetailRow>
+                          <DetailRow label="Total">{money(total)}</DetailRow>
+                          <DetailRow label="Method">{paymentMethodLabel(o.paymentMethod)}</DetailRow>
+                        </dl>
+                      </div>
 
-                      <span className="label-meta text-charcoal/35 mt-6 block">Manage status</span>
-                      <dl className="mt-2 space-y-3">
-                        <DetailRow label="Order status">
-                          <StatusSelect
-                            value={orderStatus}
-                            options={ORDER_STATUSES}
-                            saving={savingOrderStatus}
-                            disabled={savingOrderStatus}
-                            onChange={(v) => updateField(o, 'orderStatus', v)}
-                          />
-                        </DetailRow>
-                        <DetailRow label="Payment status">
-                          <StatusSelect
-                            value={o.paymentStatus}
-                            options={PAYMENT_STATUSES}
-                            saving={savingPaymentStatus}
-                            disabled={savingPaymentStatus}
-                            onChange={(v) => updateField(o, 'paymentStatus', v)}
-                          />
-                        </DetailRow>
-                      </dl>
+                      <div className="adm-detail-section">
+                        <span className="adm-label">Manage status</span>
+                        <dl className="adm-kv">
+                          <DetailRow label="Order status" control>
+                            <StatusSelect
+                              value={orderStatus}
+                              options={ORDER_STATUSES}
+                              saving={savingOrderStatus}
+                              disabled={savingOrderStatus}
+                              onChange={(v) => updateField(o, 'orderStatus', v)}
+                            />
+                          </DetailRow>
+                          <DetailRow label="Payment status" control>
+                            <StatusSelect
+                              value={o.paymentStatus}
+                              options={PAYMENT_STATUSES}
+                              saving={savingPaymentStatus}
+                              disabled={savingPaymentStatus}
+                              onChange={(v) => updateField(o, 'paymentStatus', v)}
+                            />
+                          </DetailRow>
+                        </dl>
 
-                      {updateErrors[o.id] && (
-                        <p className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-                          {updateErrors[o.id]}
-                        </p>
-                      )}
+                        {updateErrors[o.id] && <p className="adm-formerror">{updateErrors[o.id]}</p>}
+                      </div>
                     </div>
                   </div>
                 )}

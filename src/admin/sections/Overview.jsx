@@ -3,6 +3,7 @@ import { Users, MessageSquare, Sparkles, ShoppingBag, Package } from 'lucide-rea
 import { useAdminCollection } from '@/admin/hooks/useAdminCollection';
 import StatCard from '@/admin/components/StatCard';
 import StatusBadge from '@/admin/components/StatusBadge';
+import PageHeader from '@/admin/components/PageHeader';
 import { LoadingState, ErrorState, EmptyState } from '@/admin/components/StateViews';
 import { formatDateTime } from '@/admin/utils/format';
 import { products } from '@/data/products';
@@ -23,11 +24,8 @@ export default function Overview() {
   const loading = usersLoading || inqLoading || ordersLoading;
 
   return (
-    <div className="space-y-8">
-      <div>
-        <p className="label-meta text-charcoal/40">ABIXMART Admin</p>
-        <h1 className="mt-2 font-display text-3xl text-charcoal">Overview</h1>
-      </div>
+    <div className="adm-page">
+      <PageHeader title="Overview" />
 
       {loading ? (
         <LoadingState label="Loading dashboard…" />
@@ -35,7 +33,7 @@ export default function Overview() {
         <ErrorState message="Could not load overview data. Please refresh." />
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+          <div className="adm-stats">
             <StatCard label="Total Customers" value={users.length} icon={Users} />
             <StatCard label="Total Inquiries" value={inquiries.length} icon={MessageSquare} />
             <StatCard label="New Inquiries" value={newInquiries.length} icon={Sparkles} />
@@ -44,7 +42,7 @@ export default function Overview() {
           </div>
 
           <div>
-            <h2 className="font-display text-xl text-charcoal mb-4">Recent Inquiries</h2>
+            <h2 className="adm-h2 font-display" style={{ marginBottom: '1rem' }}>Recent Inquiries</h2>
             {recentInquiries.length === 0 ? (
               <EmptyState
                 icon={MessageSquare}
@@ -52,20 +50,20 @@ export default function Overview() {
                 body="Inquiries submitted through the website will appear here."
               />
             ) : (
-              <div className="border border-charcoal/10 bg-ivory rounded-md divide-y divide-charcoal/8 overflow-hidden">
+              <div className="adm-list">
                 {recentInquiries.map((inq) => (
-                  <div key={inq.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-charcoal font-medium truncate">{inq.name || 'Unnamed'}</p>
-                      <p className="text-sm text-charcoal/50 truncate">
+                  <div key={inq.id} className="adm-row">
+                    <div className="adm-row-main">
+                      <p className="adm-row-title">{inq.name || 'Unnamed'}</p>
+                      <p className="adm-row-sub">
                         {inq.email || '—'} {inq.phone ? `• ${inq.phone}` : ''}
                       </p>
                       {inq.productInterest && (
-                        <p className="text-xs text-charcoal/40 mt-0.5">Interested in: {inq.productInterest}</p>
+                        <p className="adm-row-meta" style={{ marginTop: '0.2rem' }}>Interested in: {inq.productInterest}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-xs text-charcoal/40">{formatDateTime(inq.createdAt)}</span>
+                    <div className="adm-row-aside">
+                      <span className="adm-row-meta">{formatDateTime(inq.createdAt)}</span>
                       <StatusBadge status={inq.status || 'new'} />
                     </div>
                   </div>

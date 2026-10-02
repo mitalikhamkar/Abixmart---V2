@@ -1,14 +1,12 @@
 import React from 'react';
 import { TrendingUp } from 'lucide-react';
+import PageHeader from '@/admin/components/PageHeader';
 import { EmptyState } from '@/admin/components/StateViews';
 
 export default function ProductPerformance() {
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="label-meta text-charcoal/40">ABIXMART Admin</p>
-        <h1 className="mt-2 font-display text-3xl text-charcoal">Product Performance</h1>
-      </div>
+    <div className="adm-page">
+      <PageHeader title="Product Performance" />
       <EmptyState
         icon={TrendingUp}
         title="No sales data yet"

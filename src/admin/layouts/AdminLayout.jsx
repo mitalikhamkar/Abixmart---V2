@@ -3,14 +3,15 @@ import { Outlet } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu } from 'lucide-react';
 import AdminSidebar from '@/admin/components/AdminSidebar';
+import '@/admin/admin.css';
 
 export default function AdminLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-secondary flex">
+    <div className="adm-shell">
       {/* Desktop persistent sidebar */}
-      <aside className="hidden lg:block w-64 shrink-0 sticky top-0 h-screen">
+      <aside className="adm-aside">
         <AdminSidebar />
       </aside>
 
@@ -23,14 +24,14 @@ export default function AdminLayout() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setMobileOpen(false)}
-              className="fixed inset-0 bg-charcoal/60 z-40 lg:hidden"
+              className="adm-overlay"
             />
             <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'tween', duration: 0.25 }}
-              className="fixed inset-y-0 left-0 w-72 max-w-[85vw] z-50 lg:hidden"
+              className="adm-drawer"
             >
               <AdminSidebar
                 showCloseButton
@@ -42,17 +43,17 @@ export default function AdminLayout() {
         )}
       </AnimatePresence>
 
-      <div className="flex-1 min-w-0 flex flex-col">
-        <header className="lg:hidden sticky top-0 z-30 bg-charcoal text-ivory flex items-center justify-between px-4 py-3.5">
-          <button onClick={() => setMobileOpen(true)} className="p-1">
+      <div className="adm-body">
+        <header className="adm-mobilebar">
+          <button onClick={() => setMobileOpen(true)} className="adm-iconbtn adm-iconbtn--bare" aria-label="Open menu">
             <Menu size={20} />
           </button>
-          <span className="label-meta text-gold-light">ABIXMART Admin</span>
-          <span className="w-5" />
+          <span className="adm-label adm-label--gold">ABIXMART Admin</span>
+          <span style={{ width: '2.25rem' }} />
         </header>
 
-        <main className="flex-1 min-w-0 px-4 sm:px-6 lg:px-10 py-6 lg:py-10">
-          <div className="max-w-7xl mx-auto w-full">
+        <main className="adm-main">
+          <div className="adm-container">
             <Outlet />
           </div>
         </main>

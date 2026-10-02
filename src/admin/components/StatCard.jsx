@@ -2,13 +2,13 @@ import React from 'react';
 
 export default function StatCard({ label, value, icon: Icon, hint }) {
   return (
-    <div className="border border-charcoal/10 bg-ivory rounded-md px-5 py-5">
-      <div className="flex items-center justify-between">
-        <span className="label-meta text-charcoal/45">{label}</span>
-        {Icon && <Icon size={16} className="text-resin" />}
+    <div className="adm-stat">
+      <div className="adm-stat-top">
+        <span className="adm-label">{label}</span>
+        {Icon && <Icon size={16} className="adm-stat-icon" />}
       </div>
-      <p className="mt-3 font-display text-3xl text-charcoal">{value}</p>
-      {hint && <p className="mt-1 text-xs text-charcoal/40">{hint}</p>}
+      <p className="adm-stat-value font-display">{value}</p>
+      {hint && <p className="adm-stat-hint">{hint}</p>}
     </div>
   );
 }
