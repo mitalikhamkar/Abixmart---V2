@@ -14,6 +14,21 @@ const ORDER_ID_PREFIX = 'ABX';
 // when a customer is copying an order ID off a screen.
 const ORDER_ID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
+// Valid values for the two INDEPENDENT order fields. `orderStatus`
+// tracks fulfilment; `paymentStatus` tracks payment. They are never
+// combined. Used by the Admin Orders section (Phase C).
+export const ORDER_STATUSES = [
+  'placed',
+  'confirmed',
+  'processing',
+  'shipped',
+  'out_for_delivery',
+  'delivered',
+  'cancelled',
+];
+
+export const PAYMENT_STATUSES = ['pending', 'paid', 'failed', 'refunded'];
+
 function pad2(n) {
   return String(n).padStart(2, '0');
 }
