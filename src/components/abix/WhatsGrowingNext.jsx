@@ -2,16 +2,17 @@
 import React from 'react';
 import Eyebrow from '@/components/abix/Eyebrow';
 import ComingSoonMarquee from '@/components/abix/ComingSoonMarquee';
-import { products } from '@/data/products';
+import { useCatalog } from '@/lib/CatalogContext';
 import { ABIX } from './brandColors';
 
 // CHANGED: the static GrowingCard row is gone — replaced by the shared
 // ComingSoonMarquee (continuous reel). The section wrapper, heading,
 // and background gradient are unchanged.
+// G3: the coming-soon list now comes from the Firestore-backed catalog.
 export default function WhatsGrowingNext() {
-  const comingSoon = products.filter((p) => p.status === 'coming_soon');
+  const { comingSoonProducts, loading } = useCatalog();
 
-  if (comingSoon.length === 0) return null;
+  if (loading || comingSoonProducts.length === 0) return null;
 
   return (
     <section

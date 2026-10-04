@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Bell, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { products } from '@/data/products';
+import { useCatalog } from '@/lib/CatalogContext';
 import { useProductNotify } from '@/hooks/useProductNotify';
 import { ABIX } from './brandColors';
 
@@ -73,10 +73,10 @@ function MarqueeCard({ product }) {
 }
 
 // NEW — shared continuous product reel, reused wherever "Coming Soon"
-// appears (Home, Shop, About). Pulls directly from the existing
-// products.js data (status === 'coming_soon'), so adding a future
-// coming-soon product to that array is automatically picked up here
-// with no changes to this file or any page using it.
+// appears (Home, Shop, About). Pulls from the Firestore-backed
+// catalog (status === 'coming_soon'), so a product set to Coming Soon
+// in Admin is automatically picked up here with no changes to this
+// file or any page using it.
 //
 // Seamless loop: the product sequence is rendered TWICE back to back
 // in one flex track, and the CSS animation translates the track by
@@ -85,7 +85,7 @@ function MarqueeCard({ product }) {
 // invisible. Duration scales with item count so the perceived speed
 // stays constant regardless of how many coming-soon products exist.
 export default function ComingSoonMarquee() {
-  const comingSoon = products.filter((p) => p.status === 'coming_soon');
+  const { comingSoonProducts: comingSoon, loading } = useCatalog();
   const [reduceMotion, setReduceMotion] = useState(false);
 
   useEffect(() => {
@@ -96,7 +96,7 @@ export default function ComingSoonMarquee() {
     return () => mq.removeEventListener('change', handleChange);
   }, []);
 
-  if (comingSoon.length === 0) return null;
+  if (loading || comingSoon.length === 0) return null;
 
   // ~7s per card feels calm/editorial rather than ticker-like.
   const durationSeconds = comingSoon.length * 7;

@@ -6,7 +6,7 @@ import ProductCard from '@/components/abix/ProductCard';
 import ShopQuickView from '@/components/abix/ShopQuickView';
 import ComingSoonMarquee from '@/components/abix/ComingSoonMarquee';
 import BrandStrip from '@/components/abix/BrandStrip';
-import { products } from '@/data/products';
+import { useCatalog } from '@/lib/CatalogContext';
 import { useAuth } from '@/lib/AuthContext';
 import { checkNotifySubscribed, subscribeToNotify } from '@/lib/notifyUtils';
 import { ABIX } from '@/components/abix/brandColors';
@@ -16,11 +16,13 @@ const PENDING_NOTIFY_KEY = 'abixmart_pending_notify';
 
 export default function Shop() {
   const { user } = useAuth();
+  const { products, comingSoonProducts, loading } = useCatalog();
   const [returnBanner, setReturnBanner] = useState(null);
   const [query, setQuery] = useState('');
   const [quickViewProduct, setQuickViewProduct] = useState(null);
 
   useEffect(() => {
+    if (loading) return;
     const pendingId = sessionStorage.getItem(PENDING_NOTIFY_KEY);
     if (!pendingId || !user) return;
     (async () => {
@@ -38,7 +40,7 @@ export default function Shop() {
         console.error('[ABIXMART] Pending notify resume failed:', err?.code, err?.message);
       }
     })();
-  }, [user]);
+  }, [user, loading, products]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -47,10 +49,10 @@ export default function Shop() {
       const haystack = [p.name, p.subtitle, p.category, p.shortDesc].filter(Boolean).join(' ').toLowerCase();
       return haystack.includes(q);
     });
-  }, [query]);
+  }, [query, products]);
 
   const availableFiltered = filtered.filter((p) => p.status === 'available');
-  const noResults = query.trim() !== '' && availableFiltered.length === 0;
+  const noResults = !loading && query.trim() !== '' && availableFiltered.length === 0;
 
   return (
     <PageTransition>
@@ -96,6 +98,12 @@ export default function Shop() {
         </div>
 
         <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10 mt-12 lg:mt-16">
+          {loading && (
+            <p className="text-center py-10" style={{ color: ABIX.ivory45 }}>
+              Loading the collection…
+            </p>
+          )}
+
           {availableFiltered.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
               {availableFiltered.map((p) => (
@@ -113,23 +121,25 @@ export default function Shop() {
       </section>
 
       {/* CHANGED: static ComingSoonMiniCard grid replaced with the
-          shared ComingSoonMarquee — a continuous reel driven directly
-          off products.js, matching Home and About. Note this is no
+          shared ComingSoonMarquee — a continuous reel driven by the
+          Firestore-backed catalog, matching Home and About. Note this is no
           longer filtered by the search box above; the marquee always
           shows the full coming-soon set per the brief's data-driven,
           single-source-of-truth requirement. */}
-      <section
-        className="relative py-14 lg:py-20 overflow-hidden grain"
-        style={{ background: `linear-gradient(180deg, ${ABIX.obsidian} 0%, ${ABIX.espresso} 100%)` }}
-      >
-        <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10 mb-8 lg:mb-10">
-          <span className="text-[11px] font-semibold uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>Coming Soon</span>
-          <h2 className="mt-2 font-display text-2xl sm:text-3xl leading-tight tracking-tight" style={{ color: ABIX.ivory }}>
-            What's next.
-          </h2>
-        </div>
-        <ComingSoonMarquee />
-      </section>
+      {comingSoonProducts.length > 0 && (
+        <section
+          className="relative py-14 lg:py-20 overflow-hidden grain"
+          style={{ background: `linear-gradient(180deg, ${ABIX.obsidian} 0%, ${ABIX.espresso} 100%)` }}
+        >
+          <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10 mb-8 lg:mb-10">
+            <span className="text-[11px] font-semibold uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>Coming Soon</span>
+            <h2 className="mt-2 font-display text-2xl sm:text-3xl leading-tight tracking-tight" style={{ color: ABIX.ivory }}>
+              What's next.
+            </h2>
+          </div>
+          <ComingSoonMarquee />
+        </section>
+      )}
 
       <BrandStrip />
 

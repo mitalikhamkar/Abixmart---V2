@@ -8,7 +8,7 @@ import {
 import PageTransition from '@/components/abix/PageTransition';
 import { useAuth } from '@/lib/AuthContext';
 import { useShop } from '@/lib/ShopContext';
-import { products } from '@/data/products';
+import { useCatalog } from '@/lib/CatalogContext';
 import { getOrdersForUser, getDisplayOrderId } from '@/lib/orderUtils';
 import mineralBg from '@/assets/shilajit-steps/himalayaBG.png';
 import logo from '@/assets/logo/Abixmart-header.png';
@@ -299,7 +299,12 @@ function AddressesPanel({ profile, onEdit }) {
 // ids) from useShop() that the header and the /wishlist page use, so
 // all three stay in sync. No new collection, no duplicate logic.
 function WishlistPanel({ wishlist, toggleWishlist, navigate }) {
+  const { products, loading } = useCatalog();
   const items = (wishlist || []).map((id) => products.find((p) => p.id === id)).filter(Boolean);
+
+  if (loading) {
+    return <p className="text-ivory/40 text-sm uppercase tracking-luxe-sm">Loading your wishlist…</p>;
+  }
 
   if (items.length === 0) {
     return (

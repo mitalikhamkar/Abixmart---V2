@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useMemo, useRe
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/AuthContext';
-import { products } from '@/data/products';
+import { useCatalog } from '@/lib/CatalogContext';
 
 const ShopContext = createContext(null);
 
@@ -54,7 +54,9 @@ export function ShopProvider({ children }) {
   const skipNextCartSaveRef = useRef(false);
   const skipNextWishlistSaveRef = useRef(false);
 
-  const productById = useCallback((id) => products.find((p) => p.id === id), []);
+  // G3: cart lines are resolved against the Firestore-backed catalog
+  // (see CatalogContext) instead of the static products.js array.
+  const { getProductById: productById } = useCatalog();
 
   // CHANGED: no longer calls setCartOpen(true). Adding to cart must
   // never open CartDrawer — the calling component (ProductCard's Quick

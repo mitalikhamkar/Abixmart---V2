@@ -19,6 +19,7 @@ import Cart from '@/pages/Cart';
 import Wishlist from '@/pages/Wishlist';
 import SiteLayout from '@/components/abix/SiteLayout';
 import { ShopProvider } from '@/lib/ShopContext';
+import { CatalogProvider } from '@/lib/CatalogContext';
 import { AuthProvider } from '@/lib/AuthContext';
 
 import AdminLogin from '@/pages/AdminLogin';
@@ -41,56 +42,58 @@ function App() {
   return (
     <QueryClientProvider client={queryClientInstance}>
       <AuthProvider>
-        <ShopProvider>
-          <Router>
-            <ScrollToTop />
-            <Routes>
-              <Route element={<SiteLayout />}>
-                <Route path="/" element={<Home />} />
-                <Route path="/shop" element={<Shop />} />
-                <Route path="/shop/:slug" element={<ProductDetail />} />
-                <Route path="/how-to-take-shilajit" element={<HowToTakeShilajit />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/support" element={<Support />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/create-account" element={<CreateAccount />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/account" element={<Account />} />
-                <Route path="/auth/action" element={<AuthAction />} />
-                <Route path="/cart" element={<Cart />} />
-                <Route path="/wishlist" element={<Wishlist />} />
-              </Route>
-
-              <Route element={<AdminAuthProvider><Outlet /></AdminAuthProvider>}>
-                <Route path="/admin/login" element={<AdminLogin />} />
-                <Route
-                  path="/admin"
-                  element={
-                    <AdminGuard>
-                      <AdminLayout />
-                    </AdminGuard>
-                  }
-                >
-                  <Route index element={<Navigate to="overview" replace />} />
-                  <Route path="overview" element={<Overview />} />
-                  <Route path="customers" element={<Customers />} />
-                  <Route path="orders" element={<Orders />} />
-                  <Route path="products" element={<Products />} />
-                  <Route path="inquiries" element={<Inquiries />} />
-                  <Route path="analytics" element={<Analytics />} />
-                  <Route path="customer-activity" element={<CustomerActivity />} />
-                  <Route path="acquisition" element={<Acquisition />} />
-                  <Route path="product-performance" element={<ProductPerformance />} />
-                  <Route path="community" element={<Community />} />
-                  <Route path="settings" element={<Settings />} />
+        <CatalogProvider>
+          <ShopProvider>
+            <Router>
+              <ScrollToTop />
+              <Routes>
+                <Route element={<SiteLayout />}>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/shop" element={<Shop />} />
+                  <Route path="/shop/:slug" element={<ProductDetail />} />
+                  <Route path="/how-to-take-shilajit" element={<HowToTakeShilajit />} />
+                  <Route path="/about" element={<About />} />
+                  <Route path="/support" element={<Support />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/create-account" element={<CreateAccount />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/account" element={<Account />} />
+                  <Route path="/auth/action" element={<AuthAction />} />
+                  <Route path="/cart" element={<Cart />} />
+                  <Route path="/wishlist" element={<Wishlist />} />
                 </Route>
-              </Route>
 
-              <Route path="*" element={<PageNotFound />} />
-            </Routes>
-          </Router>
-          <Toaster />
-        </ShopProvider>
+                <Route element={<AdminAuthProvider><Outlet /></AdminAuthProvider>}>
+                  <Route path="/admin/login" element={<AdminLogin />} />
+                  <Route
+                    path="/admin"
+                    element={
+                      <AdminGuard>
+                        <AdminLayout />
+                      </AdminGuard>
+                    }
+                  >
+                    <Route index element={<Navigate to="overview" replace />} />
+                    <Route path="overview" element={<Overview />} />
+                    <Route path="customers" element={<Customers />} />
+                    <Route path="orders" element={<Orders />} />
+                    <Route path="products" element={<Products />} />
+                    <Route path="inquiries" element={<Inquiries />} />
+                    <Route path="analytics" element={<Analytics />} />
+                    <Route path="customer-activity" element={<CustomerActivity />} />
+                    <Route path="acquisition" element={<Acquisition />} />
+                    <Route path="product-performance" element={<ProductPerformance />} />
+                    <Route path="community" element={<Community />} />
+                    <Route path="settings" element={<Settings />} />
+                  </Route>
+                </Route>
+
+                <Route path="*" element={<PageNotFound />} />
+              </Routes>
+            </Router>
+            <Toaster />
+          </ShopProvider>
+        </CatalogProvider>
       </AuthProvider>
     </QueryClientProvider>
   )

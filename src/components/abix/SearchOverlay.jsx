@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search } from 'lucide-react';
 import { useShop } from '@/lib/ShopContext';
-import { products } from '@/data/products';
+import { useCatalog } from '@/lib/CatalogContext';
 
 export default function SearchOverlay() {
   const { searchOpen, closeSearch } = useShop();
+  const { products } = useCatalog();
   const [q, setQ] = useState('');
   const inputRef = useRef(null);
 

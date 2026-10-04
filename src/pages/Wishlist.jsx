@@ -5,12 +5,13 @@ import PageTransition from '@/components/abix/PageTransition';
 import Eyebrow from '@/components/abix/Eyebrow';
 import { useShop } from '@/lib/ShopContext';
 import { useAuth } from '@/lib/AuthContext';
-import { getProductBySlug, products } from '@/data/products';
+import { useCatalog } from '@/lib/CatalogContext';
 import { ABIX } from '@/components/abix/brandColors';
 
 export default function Wishlist() {
   const { user } = useAuth();
   const { wishlist, toggleWishlist, addToCart } = useShop();
+  const { products, loading: catalogLoading } = useCatalog();
 
   const items = wishlist.map((id) => products.find((p) => p.id === id)).filter(Boolean);
 
@@ -43,6 +44,8 @@ export default function Wishlist() {
                 Log in
               </Link>
             </div>
+          ) : catalogLoading ? (
+            <p className="mt-16 text-center text-sm" style={{ color: ABIX.ivory45 }}>Loading your wishlist…</p>
           ) : items.length === 0 ? (
             <div className="mt-16 text-center">
               <div className="mx-auto h-16 w-16 rounded-full flex items-center justify-center mb-5" style={{ backgroundColor: ABIX.espresso }}>
