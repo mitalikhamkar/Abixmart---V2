@@ -23,6 +23,8 @@
   color: var(--adm-text);
   color-scheme: dark;
   -webkit-font-smoothing: antialiased;
+  /* Always draw digits as standard lining figures, never old-style. */
+  font-variant-numeric: lining-nums;
 }
 
 /* ---------- Shell / layout ---------- */
@@ -487,3 +489,17 @@
 .adm-timelabels { display: flex; gap: 3px; margin-top: 0.45rem; }
 .adm-timelabels > span { position: relative; flex: 1; min-width: 0; height: 1rem; }
 .adm-timelabels em { position: absolute; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 0.625rem; color: var(--adm-text-3); white-space: nowrap; }
+
+/* ---------- Number typography ----------
+   Numbers in the admin use the normal UI font with standard lining
+   figures (0123456789), never the decorative display font. These rules
+   are placed last and use .adm-shell for higher specificity than the
+   site's font-display / font-price utility classes. */
+.adm-shell .adm-stat-value,
+.adm-shell .adm-card-price,
+.adm-shell .font-price {
+  font-family: inherit;
+  font-weight: 500;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.adm-shell .adm-stat-value { letter-spacing: -0.01em; }
