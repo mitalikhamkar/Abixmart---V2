@@ -1,27 +1,27 @@
 import React, { useMemo } from 'react';
 import { Users, MessageSquare, Sparkles, ShoppingBag, Package } from 'lucide-react';
 import { useAdminCollection } from '@/admin/hooks/useAdminCollection';
+import { useAdminProducts } from '@/admin/hooks/useAdminProducts';
 import StatCard from '@/admin/components/StatCard';
 import StatusBadge from '@/admin/components/StatusBadge';
 import PageHeader from '@/admin/components/PageHeader';
 import { LoadingState, ErrorState, EmptyState } from '@/admin/components/StateViews';
 import { formatDateTime } from '@/admin/utils/format';
-import { products } from '@/data/products';
 
 export default function Overview() {
   const { data: users, loading: usersLoading, error: usersError } = useAdminCollection('users', { orderByField: 'createdAt', direction: 'desc' });
   const { data: inquiries, loading: inqLoading, error: inqError } = useAdminCollection('inquiries', { orderByField: 'createdAt', direction: 'desc' });
   const { data: orders, loading: ordersLoading } = useAdminCollection('orders');
-  // Total Products reflects the existing application catalog
-  // (src/data/products.js) — the same source as Admin → Products — until
-  // products are migrated to Firestore in a later phase.
+  // Total Products uses the same source as Admin → Products: the Firestore
+  // `products` collection, or the built-in catalog until it has been seeded.
+  const { products, loading: productsLoading } = useAdminProducts();
 
   const newInquiries = useMemo(
     () => inquiries.filter((i) => (i.status || 'new').toLowerCase() === 'new'),
     [inquiries]
   );
   const recentInquiries = inquiries.slice(0, 6);
-  const loading = usersLoading || inqLoading || ordersLoading;
+  const loading = usersLoading || inqLoading || ordersLoading || productsLoading;
 
   return (
     <div className="adm-page">
