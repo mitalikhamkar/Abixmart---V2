@@ -7,12 +7,12 @@ import { products, ritualBundles } from '@/data/products';
 // Definitions used across the admin:
 //   booked order   = any order whose orderStatus is not "cancelled"
 //   booked revenue = sum of stored `total` over booked orders
-//   collected      = orders where paymentStatus === "paid" (set manually by an
-//                    admin — payment verification is not implemented)
-//   refunded       = orders where paymentStatus === "refunded" (partial refund
-//                    amounts are not stored, so only the order value is shown)
-//   pack           = one unit of `item.qty` (a bundle); jars = packs × jars per
-//                    ritual bundle (from ritualBundles in products.js)
+//   collected      = orders where paymentStatus === "paid"
+//   refunded       = orders where paymentStatus === "refunded"
+//   pack           = one unit of `item.qty` (a package); jars = packs × jars
+//                    per package. G4: jars per package is read from the order
+//                    item's `jarsPerPack` when present, otherwise (historical
+//                    orders) from the static ritualBundles.
 
 export const ORDER_STATUS_ORDER = [
   'placed', 'confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled',
@@ -100,8 +100,6 @@ function labelFor(period, d) {
 const DEFAULT_WINDOW = { day: 30, week: 12, month: 12 };
 
 // Builds a continuous series of the last `count` periods ending now.
-// Periods with no documents are real zeros. Documents with no usable date
-// or outside the window are skipped.
 export function buildSeries(items, { period = 'day', count, getDate, getValue = () => 1, now = new Date() }) {
   const n = count || DEFAULT_WINDOW[period] || 30;
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -152,8 +150,6 @@ export function countSince(items, getDate, days, now = Date.now()) {
  * Generic grouping
  * ---------------------------------------------------------------- */
 
-// Returns [{ key, label, value }] where value is the document count.
-// `order` forces a known display order; everything else sorts by count.
 export function countBy(items, keyFn, { labelFn, order = [] } = {}) {
   const map = new Map();
   items.forEach((item) => {
@@ -189,7 +185,6 @@ export function countBy(items, keyFn, { labelFn, order = [] } = {}) {
 
 export const isBooked = (order) => order?.orderStatus !== 'cancelled';
 
-// Stored order total as a number, or null when missing/invalid.
 export function orderTotal(order) {
   const v = order?.total;
   if (v === null || v === undefined || v === '') return null;
@@ -234,7 +229,6 @@ export function calculateRevenue(orders) {
   return result;
 }
 
-// Average booked order value over booked orders that have a stored total.
 export function calculateAverageOrderValue(orders) {
   let sum = 0;
   let n = 0;
@@ -266,8 +260,6 @@ function titleCase(s) {
   return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// Booked orders grouped by shippingAddress.state or .city
-// (case/whitespace-insensitive so "Mumbai" and "mumbai " are one bucket).
 export function calculateGeoDistribution(orders, field) {
   const normalize = (o) => {
     const raw = o.shippingAddress?.[field];
@@ -281,7 +273,6 @@ export function calculateSignupMethodDistribution(users) {
   return countBy(users, (u) => u.provider, { order: ['google', 'password'], labelFn: signupMethodLabel });
 }
 
-// Repeat customers among booked orders, grouped by order.uid.
 export function calculateRepeatCustomerRate(orders) {
   const perUid = new Map();
   let unattributed = 0;
@@ -328,12 +319,19 @@ function numOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-// jars = qty × jars-per-bundle for ritual bundles; an item with no variant
-// is one jar per qty. A variant that isn't in ritualBundles returns null
-// (unknown) instead of a guess.
+// G4: jars = qty × jars-per-package.
+//   1. Orders created after G4 carry `jarsPerPack` on the item (taken from
+//      the Firestore variant), so any product/variant is counted correctly.
+//   2. Historical orders have no such field: an item with no variant is one
+//      jar per qty; a variant found in the static ritualBundles uses its
+//      jar count; anything else returns null (unknown) instead of a guess.
 export function jarsForItem(item) {
   const qty = numOrNull(item?.qty);
   if (qty === null) return null;
+
+  const perPack = numOrNull(item?.jarsPerPack);
+  if (perPack !== null && perPack > 0) return qty * perPack;
+
   if (!item.variantId) return qty;
   const bundle = ritualBundles.find((b) => b.id === item.variantId);
   return bundle ? qty * bundle.jars : null;
@@ -395,10 +393,11 @@ export function calculateOrderSize(orders) {
   };
 }
 
-// Per-product performance over booked orders. Available catalog products
-// always appear (a real zero if never ordered); coming-soon products never
-// get sales rows. Revenue is the sum of stored item subtotals.
-export function calculateProductPerformance(orders) {
+// Per-product performance over booked orders.
+// G4: `catalog` is the list of product documents ({ id, name, status }) to
+// use for names and the "available" rows. Pass the Firestore `products`
+// collection; it defaults to the static list so existing callers keep working.
+export function calculateProductPerformance(orders, catalog = products) {
   const items = flattenOrderItems(orders.filter(isBooked));
   const rows = new Map();
   const variants = new Map();
@@ -411,13 +410,13 @@ export function calculateProductPerformance(orders) {
     productId, name, inCatalog, orderKeys: new Set(), packs: 0, jars: 0, jarsComplete: true, revenue: 0,
   });
 
-  products.filter((p) => p.status === 'available').forEach((p) => rows.set(p.id, newRow(p.id, p.name, true)));
+  catalog.filter((p) => p.status === 'available').forEach((p) => rows.set(p.id, newRow(p.id, p.name, true)));
 
   items.forEach((it) => {
     const productId = it.productId || 'unknown';
-    const catalog = products.find((p) => p.id === productId);
+    const catalogEntry = catalog.find((p) => p.id === productId);
     if (!rows.has(productId)) {
-      rows.set(productId, newRow(productId, catalog?.name || it.name || productId, Boolean(catalog)));
+      rows.set(productId, newRow(productId, catalogEntry?.name || it.name || productId, Boolean(catalogEntry)));
     }
     const row = rows.get(productId);
     const productName = row.name;
@@ -493,16 +492,16 @@ export function calculateProductPerformance(orders) {
   };
 }
 
-// Notify-me signups per coming-soon product. Each productNotifications doc
-// is one customer for one product (doc id = uid_productId), so a count of
-// docs is a count of customers.
-export function calculateNotifyInterest(notifications) {
+// Notify-me signups per coming-soon product.
+// G4: `catalog` defaults to the static list; pass the Firestore `products`
+// collection so Firestore-created coming-soon products are included.
+export function calculateNotifyInterest(notifications, catalog = products) {
   const counts = new Map();
   notifications.forEach((n) => {
     if (n.productId) counts.set(n.productId, (counts.get(n.productId) || 0) + 1);
   });
 
-  const rows = products
+  const rows = catalog
     .filter((p) => p.status === 'coming_soon')
     .map((p) => ({ key: p.id, label: p.name, value: counts.get(p.id) || 0 }))
     .sort((a, b) => b.value - a.value);
@@ -515,10 +514,6 @@ export function calculateNotifyInterest(notifications) {
  * Customers / activity
  * ---------------------------------------------------------------- */
 
-// Merges registrations, orders and inquiries into one list, newest first.
-// `doc` is the source document; pages decide how to render it.
-// This is derived from timestamps on those documents — there is no event
-// log, so nothing else (logins, browsing, cart/wishlist events) is included.
 export function buildActivityFeed({ users = [], orders = [], inquiries = [] }) {
   const feed = [];
   users.forEach((u) => {
@@ -536,8 +531,6 @@ export function buildActivityFeed({ users = [], orders = [], inquiries = [] }) {
   return feed.sort((a, b) => b.at - a.at);
 }
 
-// Customers who have at least one booked order, ranked by order value.
-// Joined on users doc id === orders.uid.
 export function calculateCustomerStats(users, orders) {
   const booked = orders.filter(isBooked);
   const stats = new Map();

@@ -6,10 +6,8 @@ import { useCatalog } from '@/lib/CatalogContext';
 
 const ShopContext = createContext(null);
 
-// A cart line is now uniquely identified by product id + variant id
-// (null variant = "the plain product"), so a 1-Jar and a 2-Jar Ritual
-// of the same product are correctly two separate lines instead of one
-// line whose price would otherwise be recomputed as product.price×qty.
+// A cart line is uniquely identified by product id + variant id
+// (null variant = "the plain product").
 function cartKey(item) {
   return `${item.id}:${item.variantId || ''}`;
 }
@@ -41,12 +39,7 @@ export function ShopProvider({ children }) {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutPrefill, setCheckoutPrefill] = useState(null);
   const [assistOpen, setAssistOpen] = useState(false);
-  // NOTE: cartOpen/openCart/closeCart are kept only so CartDrawer.jsx
-  // (which is intentionally left in the project per the brief) still
-  // compiles if it's ever re-rendered. Nothing in the app calls
-  // openCart() anymore — the header and every "add to cart" action
-  // navigate to the /cart page instead. See ProductCard.jsx,
-  // ProductDetail.jsx and Header.jsx.
+  // cartOpen/openCart/closeCart are kept only so CartDrawer.jsx still compiles.
   const [cartOpen, setCartOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -54,30 +47,50 @@ export function ShopProvider({ children }) {
   const skipNextCartSaveRef = useRef(false);
   const skipNextWishlistSaveRef = useRef(false);
 
-  // G3: cart lines are resolved against the Firestore-backed catalog
-  // (see CatalogContext) instead of the static products.js array.
-  const { getProductById: productById } = useCatalog();
+  const { getProductById: productById, loading: catalogLoading } = useCatalog();
 
-  // CHANGED: no longer calls setCartOpen(true). Adding to cart must
-  // never open CartDrawer — the calling component (ProductCard's Quick
-  // Add, ProductDetail's Add to Cart) is responsible for navigating to
-  // /cart itself, so this stays a pure state update.
-  const addToCart = useCallback((id, qty = 1, variant = null) => {
-    setCart((prev) => {
-      const variantId = variant?.id ?? null;
-      const key = `${id}:${variantId || ''}`;
-      const existingIndex = prev.findIndex((c) => cartKey(c) === key);
-      if (existingIndex >= 0) {
-        const updated = [...prev];
-        updated[existingIndex] = { ...updated[existingIndex], qty: updated[existingIndex].qty + qty };
-        return updated;
+  // G4: only `available` products with an existing variant can be added.
+  // The price and label are taken from the catalog, never from the caller.
+  // Returns true when the line was added, false when it was refused.
+  const addToCart = useCallback(
+    (id, qty = 1, variant = null) => {
+      const product = productById(id);
+      if (!product || product.status !== 'available') {
+        // eslint-disable-next-line no-console
+        console.warn('[ABIXMART] Refused to add a product that is not available:', id);
+        return false;
       }
-      return [
-        ...prev,
-        { id, qty, variantId, variantLabel: variant?.label ?? null, unitPrice: variant?.price ?? null },
-      ];
-    });
-  }, []);
+
+      const variantId = variant?.id ?? null;
+      let variantLabel = null;
+      let unitPrice = null;
+      if (variantId) {
+        const v = (product.variants || []).find((x) => x.id === variantId);
+        if (!v) {
+          // eslint-disable-next-line no-console
+          console.warn('[ABIXMART] Refused to add an unknown variant:', id, variantId);
+          return false;
+        }
+        variantLabel = v.name;
+        unitPrice = v.price;
+      }
+
+      const addQty = Math.max(1, Math.floor(Number(qty) || 1));
+      const key = `${id}:${variantId || ''}`;
+
+      setCart((prev) => {
+        const existingIndex = prev.findIndex((c) => cartKey(c) === key);
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = { ...updated[existingIndex], qty: updated[existingIndex].qty + addQty };
+          return updated;
+        }
+        return [...prev, { id, qty: addQty, variantId, variantLabel, unitPrice }];
+      });
+      return true;
+    },
+    [productById]
+  );
 
   const removeFromCart = useCallback((id, variantId = null) => {
     setCart((prev) => prev.filter((c) => !(c.id === id && (c.variantId || null) === (variantId || null))));
@@ -230,24 +243,60 @@ export function ShopProvider({ children }) {
     })();
   }, [wishlist, user]);
 
-  const cartItems = useMemo(
-    () =>
-      cart
-        .map((c) => {
-          const product = productById(c.id);
-          if (!product) return null;
-          const unitPrice = c.unitPrice ?? product.price ?? 0;
-          return { ...c, product, unitPrice, subtotal: unitPrice * c.qty };
-        })
-        .filter(Boolean),
-    [cart, productById]
-  );
+  // G4: every cart line is re-resolved against the live catalog.
+  //   cartItems        = purchasable lines only (product is `available`, the
+  //                      variant still exists, a price exists). Price, label
+  //                      and jarsPerPack come from the catalog, so a stale
+  //                      stored unitPrice can never be charged.
+  //   unavailableItems = lines that cannot be bought (product missing/not
+  //                      available, variant removed, no price). They stay in
+  //                      the cart until the customer removes them.
+  // While the first catalog read is in flight nothing is classified.
+  const { cartItems, unavailableItems } = useMemo(() => {
+    const ok = [];
+    const bad = [];
+    if (catalogLoading) return { cartItems: ok, unavailableItems: bad };
+
+    cart.forEach((c) => {
+      const product = productById(c.id);
+      if (!product || product.status !== 'available') {
+        bad.push({ ...c, product: product || null, reason: 'unavailable' });
+        return;
+      }
+
+      let unitPrice;
+      let jarsPerPack = 1;
+      let variantLabel = c.variantLabel ?? null;
+
+      if (c.variantId) {
+        const v = (product.variants || []).find((x) => x.id === c.variantId);
+        if (!v) {
+          bad.push({ ...c, product, reason: 'variant-missing' });
+          return;
+        }
+        unitPrice = v.price;
+        jarsPerPack = v.jars || 1;
+        variantLabel = v.name;
+      } else {
+        unitPrice = product.price;
+      }
+
+      if (unitPrice === null || unitPrice === undefined || !Number.isFinite(unitPrice)) {
+        bad.push({ ...c, product, reason: 'no-price' });
+        return;
+      }
+
+      ok.push({ ...c, product, variantLabel, unitPrice, jarsPerPack, subtotal: unitPrice * c.qty });
+    });
+
+    return { cartItems: ok, unavailableItems: bad };
+  }, [cart, productById, catalogLoading]);
 
   const cartCount = useMemo(() => cart.reduce((n, c) => n + c.qty, 0), [cart]);
   const cartTotal = useMemo(() => cartItems.reduce((sum, c) => sum + c.subtotal, 0), [cartItems]);
 
   const value = {
-    cart, cartItems, cartCount, cartTotal,
+    cart, cartItems, unavailableItems, cartResolving: catalogLoading, cartCount, cartTotal,
     addToCart, removeFromCart, updateQty, clearCart,
     wishlist, toggleWishlist, isInWishlist, wishlistCount: wishlist.length,
     checkoutOpen, checkoutPrefill, openCheckout, closeCheckout,

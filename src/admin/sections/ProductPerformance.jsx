@@ -27,10 +27,18 @@ const jarLabel = (v) => `${v} jar${v === 1 ? '' : 's'}`;
 export default function ProductPerformance() {
   const { data: orders, loading, error } = useAdminCollection('orders');
   const { data: notifications, loading: notifyLoading, error: notifyError } = useAdminCollection('productNotifications');
+  // G4: the Firestore catalog supplies product names and statuses. If it
+  // cannot be read, the calculators fall back to the static list.
+  const { data: catalogDocs, loading: catalogLoading, error: catalogError } = useAdminCollection('products');
   const [period, setPeriod] = useState('day');
   const [productFilter, setProductFilter] = useState('all');
 
-  const performance = useMemo(() => calculateProductPerformance(orders), [orders]);
+  const catalogProducts = useMemo(
+    () => (catalogError || !catalogDocs ? undefined : catalogDocs),
+    [catalogDocs, catalogError]
+  );
+
+  const performance = useMemo(() => calculateProductPerformance(orders, catalogProducts), [orders, catalogProducts]);
   const bookedItems = useMemo(() => flattenOrderItems(orders.filter(isBooked)), [orders]);
   const filteredItems = useMemo(
     () => (productFilter === 'all' ? bookedItems : bookedItems.filter((i) => i.productId === productFilter)),
@@ -45,7 +53,7 @@ export default function ProductPerformance() {
     () => buildSeries(filteredItems, { period, getDate: (i) => i.createdAt, getValue: (i) => i.jars ?? 0 }),
     [filteredItems, period]
   );
-  const interest = useMemo(() => calculateNotifyInterest(notifications), [notifications]);
+  const interest = useMemo(() => calculateNotifyInterest(notifications, catalogProducts), [notifications, catalogProducts]);
 
   const productsWithSales = performance.products.filter((p) => p.packs > 0);
   const { totals } = performance;
@@ -76,7 +84,7 @@ export default function ProductPerformance() {
         </select>
       </PageHeader>
 
-      {loading ? (
+      {loading || catalogLoading ? (
         <LoadingState label="Calculating product performance…" />
       ) : error ? (
         <ErrorState message="Could not load orders. Please refresh." />
@@ -84,12 +92,12 @@ export default function ProductPerformance() {
         <>
           <div className="adm-stats">
             <StatCard label="Orders with Items" value={totals.orders} icon={Package} hint="Booked orders" />
-            <StatCard label="Packs Ordered" value={totals.packs} icon={Boxes} hint="Bundles (item qty)" />
+            <StatCard label="Packs Ordered" value={totals.packs} icon={Boxes} hint="Packages (item qty)" />
             <StatCard
               label="Jars Sold"
               value={totals.jars}
               icon={ShoppingBag}
-              hint={performance.unknownJarItems > 0 ? `Excludes ${performance.unknownJarItems} item(s) with unknown bundle size` : 'Packs × jars per bundle'}
+              hint={performance.unknownJarItems > 0 ? `Excludes ${performance.unknownJarItems} item(s) with unknown package size` : 'Packs × jars per package'}
             />
             <StatCard label="Item Revenue" value={formatINR(totals.revenue)} icon={TrendingUp} hint="Sum of stored item subtotals" />
           </div>
@@ -124,8 +132,8 @@ export default function ProductPerformance() {
               </table>
             </div>
             <p className="adm-chart-caption">
-              Packs are bundles ordered; jars = packs × jars per ritual bundle. Revenue uses the subtotal saved on each order, not current prices.
-              {performance.unknownJarItems > 0 && ' * Jar count excludes items whose bundle size is unknown.'}
+              Packs are packages ordered; jars = packs × jars per package. Revenue uses the subtotal saved on each order, not current prices.
+              {performance.unknownJarItems > 0 && ' * Jar count excludes older items whose package size is unknown.'}
               {performance.unpricedItems > 0 && ` ${performance.unpricedItems} item(s) have no stored subtotal and count as ₹0.`}
             </p>
           </div>
@@ -134,7 +142,7 @@ export default function ProductPerformance() {
             <ChartCard title="Revenue over time" hint="Stored item subtotals by order date.">
               <TimeBars series={revenueSeries} name="Item revenue" valueFormat={formatINRCompact} />
             </ChartCard>
-            <ChartCard title="Jars sold over time" hint="Jars by order date, where the bundle size is known.">
+            <ChartCard title="Jars sold over time" hint="Jars by order date, where the package size is known.">
               <TimeBars series={jarsSeries} name="Jars sold" valueFormat={jarLabel} />
             </ChartCard>
           </div>
