@@ -37,6 +37,7 @@ import Acquisition from '@/admin/sections/Acquisition';
 import ProductPerformance from '@/admin/sections/ProductPerformance';
 import Community from '@/admin/sections/Community';
 import Settings from '@/admin/sections/Settings';
+import Reviews from '@/admin/sections/Reviews';
 
 function App() {
   return (
@@ -79,6 +80,7 @@ function App() {
                     <Route path="orders" element={<Orders />} />
                     <Route path="products" element={<Products />} />
                     <Route path="inquiries" element={<Inquiries />} />
+                    <Route path="reviews" element={<Reviews />} />
                     <Route path="analytics" element={<Analytics />} />
                     <Route path="customer-activity" element={<CustomerActivity />} />
                     <Route path="acquisition" element={<Acquisition />} />

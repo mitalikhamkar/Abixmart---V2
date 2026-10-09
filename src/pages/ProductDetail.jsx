@@ -5,6 +5,7 @@ import { Minus, Plus, ArrowLeft, Heart, ShoppingBag, Check, BookOpen } from 'luc
 import PageTransition from '@/components/abix/PageTransition';
 import Eyebrow from '@/components/abix/Eyebrow';
 import ShopCollectionCard from '@/components/abix/ShopCollectionCard';
+import ProductReviews from '@/components/abix/reviews/ProductReviews';
 import { openProductTabs } from '@/data/products';
 import { useCatalog } from '@/lib/CatalogContext';
 import { useShop } from '@/lib/ShopContext';
@@ -368,6 +369,9 @@ export default function ProductDetail() {
           </div>
         </section>
       )}
+
+      {/* H1.1: customer reviews for this product (approved reviews only). */}
+      <ProductReviews product={product} />
 
       {related.length > 0 && (
         <section className="py-16 lg:py-24 border-t" style={{ background: GRAPHITE, borderColor: `${IVORY}0D` }}>

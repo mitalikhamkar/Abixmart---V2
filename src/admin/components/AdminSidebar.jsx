@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Package, ShoppingBag, MessageSquare, BarChart3,
-  Activity, Radar, TrendingUp, Users2, Settings as SettingsIcon, LogOut, X,
+  Activity, Radar, TrendingUp, Users2, Settings as SettingsIcon, LogOut, X, Star,
 } from 'lucide-react';
 import { useAdminAuth } from '@/admin/lib/AdminAuthContext';
 import logo from '@/assets/logo/Abixmart-header.png';
@@ -16,6 +16,7 @@ const NAV_GROUPS = [
       { label: 'Orders', path: '/admin/orders', icon: Package },
       { label: 'Products', path: '/admin/products', icon: ShoppingBag },
       { label: 'Inquiries', path: '/admin/inquiries', icon: MessageSquare },
+      { label: 'Reviews', path: '/admin/reviews', icon: Star },
     ],
   },
   {
