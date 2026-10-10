@@ -5,12 +5,22 @@ import CinematicAuthShell from '@/components/abix/CinematicAuthShell';
 import GoogleButton from '@/components/abix/GoogleButton';
 import { useAuth } from '@/lib/AuthContext';
 import { mapAuthError } from '@/lib/authErrors';
+import { safeRedirectPath } from '@/lib/safeRedirect';
 import loginImage from '@/assets/authentication/login.png';
 
 export default function Login() {
   const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  // NEW: optional "return to" path (for example the product page the
+  // customer was reviewing). Only same-site paths are accepted; anything
+  // else is ignored and the customer goes to /account as before.
+  const returnTo = safeRedirectPath(searchParams.get('redirect'));
+  const afterLogin = () => navigate(returnTo || '/account', { replace: Boolean(returnTo) });
+  const createAccountTo = returnTo
+    ? `/create-account?redirect=${encodeURIComponent(returnTo)}`
+    : '/create-account';
 
   // NEW: set by AuthAction.jsx's Continue button when the user verified
   // their email in a session/browser with no active login — lets them
@@ -35,7 +45,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(form.email.trim(), form.password);
-      navigate('/account');
+      afterLogin();
     } catch (err) {
       setError(mapAuthError(err));
     } finally {
@@ -49,7 +59,7 @@ export default function Login() {
     setGoogleLoading(true);
     try {
       const user = await loginWithGoogle();
-      if (user) navigate('/account');
+      if (user) afterLogin();
     } catch (err) {
       setError(mapAuthError(err));
     } finally {
@@ -68,7 +78,7 @@ export default function Login() {
         footer={
           <>
             New to ABIXMART?{' '}
-            <Link to="/create-account" className="text-gold-light font-medium hover:text-ivory transition-colors">
+            <Link to={createAccountTo} className="text-gold-light font-medium hover:text-ivory transition-colors">
               Create Account
             </Link>
           </>

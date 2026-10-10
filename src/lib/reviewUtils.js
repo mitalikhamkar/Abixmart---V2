@@ -7,6 +7,7 @@
 //
 // DATA MODEL (revision 2)
 //   reviews/{autoId}              public content, NO uid
+//                                 admin-only field: featured (boolean)
 //   reviewOwners/{uid}_{productId}  private: { uid, productId, reviewId }
 //   reviewModeration/{reviewId}     private admin audit
 
@@ -73,6 +74,9 @@ export function normalizeReview(id, data = {}) {
     rating: Number(data.rating),
     text: typeof data.text === 'string' ? data.text : '',
     status: data.status || REVIEW_STATUS.PENDING,
+    // Set only by admins. Featured reviews are preferred when the site
+    // picks which approved reviews to show.
+    featured: data.featured === true,
     createdAt: data.createdAt || null,
     updatedAt: data.updatedAt || null,
     moderatedAt: data.moderatedAt || null,

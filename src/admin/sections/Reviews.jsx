@@ -1,13 +1,19 @@
 import React, { useMemo, useState } from 'react';
-import { Star, Check, X, EyeOff, Search } from 'lucide-react';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { Star, Check, X, EyeOff, Search, Sparkles } from 'lucide-react';
+import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { adminDb as db } from '@/admin/lib/adminFirebase';
 import { useAdminAuth } from '@/admin/lib/AdminAuthContext';
 import { useAdminCollection } from '@/admin/hooks/useAdminCollection';
 import PageHeader from '@/admin/components/PageHeader';
 import { LoadingState, ErrorState, EmptyState } from '@/admin/components/StateViews';
 import { formatDateTime } from '@/admin/utils/format';
-import { REVIEWS_COLLECTION, REVIEW_STATUS, normalizeReview } from '@/lib/reviewUtils';
+import {
+  REVIEWS_COLLECTION,
+  REVIEW_OWNERS_COLLECTION,
+  REVIEW_MODERATION_COLLECTION,
+  REVIEW_STATUS,
+  normalizeReview,
+} from '@/lib/reviewUtils';
 
 const STATUSES = [
   REVIEW_STATUS.PENDING,
@@ -24,22 +30,25 @@ const BADGE_STYLE = {
   hidden: { color: '#9a9a8f', border: '#9a9a8f' },
 };
 
+const badgeBase = {
+  borderRadius: 999,
+  padding: '0.1rem 0.6rem',
+  fontSize: '0.7rem',
+  fontWeight: 600,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+};
+
 function ReviewStatusBadge({ status }) {
   const s = BADGE_STYLE[status] || BADGE_STYLE.hidden;
+  return <span style={{ ...badgeBase, color: s.color, border: `1px solid ${s.border}` }}>{status}</span>;
+}
+
+function FeaturedBadge() {
   return (
-    <span
-      style={{
-        color: s.color,
-        border: `1px solid ${s.border}`,
-        borderRadius: 999,
-        padding: '0.1rem 0.6rem',
-        fontSize: '0.7rem',
-        fontWeight: 600,
-        letterSpacing: '0.08em',
-        textTransform: 'uppercase',
-      }}
-    >
-      {status}
+    <span style={{ ...badgeBase, color: '#B49A62', border: '1px solid #B49A62' }}>
+      <Sparkles size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: '-1px' }} />
+      Featured
     </span>
   );
 }
@@ -62,6 +71,9 @@ export default function Reviews() {
   });
   // Used only to show product names; falls back to the product id.
   const { data: products } = useAdminCollection('products');
+  // Private ownership records: lets the admin see which customer wrote a
+  // review without that id ever being stored on the public review.
+  const { data: owners } = useAdminCollection(REVIEW_OWNERS_COLLECTION);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -74,22 +86,35 @@ export default function Reviews() {
     return map;
   }, [products]);
 
+  const ownerByReviewId = useMemo(() => {
+    const map = new Map();
+    owners.forEach((o) => {
+      if (o.reviewId && o.uid) map.set(o.reviewId, o.uid);
+    });
+    return map;
+  }, [owners]);
+
   const reviews = useMemo(
     () => rawReviews.map((r) => normalizeReview(r.id, r)),
     [rawReviews]
   );
 
   const counts = useMemo(() => {
-    const c = { all: reviews.length, pending: 0, approved: 0, rejected: 0, hidden: 0 };
+    const c = { all: reviews.length, pending: 0, approved: 0, rejected: 0, hidden: 0, featured: 0 };
     reviews.forEach((r) => {
       if (c[r.status] !== undefined) c[r.status] += 1;
+      if (r.featured && r.status === REVIEW_STATUS.APPROVED) c.featured += 1;
     });
     return c;
   }, [reviews]);
 
   const filtered = useMemo(() => {
     let list = reviews;
-    if (statusFilter !== 'all') list = list.filter((r) => r.status === statusFilter);
+    if (statusFilter === 'featured') {
+      list = list.filter((r) => r.featured && r.status === REVIEW_STATUS.APPROVED);
+    } else if (statusFilter !== 'all') {
+      list = list.filter((r) => r.status === statusFilter);
+    }
 
     const q = search.trim().toLowerCase();
     if (q) {
@@ -108,24 +133,41 @@ export default function Reviews() {
     });
   }, [reviews, statusFilter, search, productNames]);
 
-  const setStatus = async (id, status) => {
+  // One moderation action = one atomic batch: the public review changes
+  // (status / featured only) and the private audit record notes who did it.
+  const moderate = async (id, changes, action) => {
     setUpdatingId(id);
     setActionError('');
     try {
-      await updateDoc(doc(db, REVIEWS_COLLECTION, id), {
-        status,
+      const batch = writeBatch(db);
+      batch.update(doc(db, REVIEWS_COLLECTION, id), {
+        ...changes,
         updatedAt: serverTimestamp(),
         moderatedAt: serverTimestamp(),
-        moderatedBy: adminUser?.uid || null,
       });
+      batch.set(doc(db, REVIEW_MODERATION_COLLECTION, id), {
+        reviewId: id,
+        lastAction: action,
+        moderatedBy: adminUser?.uid || null,
+        moderatedAt: serverTimestamp(),
+      });
+      await batch.commit();
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('[ABIXMART Admin] Failed to update review status:', err?.code, err?.message);
+      console.error('[ABIXMART Admin] Failed to moderate review:', action, err?.code, err?.message);
       setActionError('Could not update that review. Please try again.');
     } finally {
       setUpdatingId(null);
     }
   };
+
+  const approve = (id) => moderate(id, { status: REVIEW_STATUS.APPROVED }, 'approved');
+  // Rejecting or hiding also clears "featured", so a re-approved review never
+  // comes back featured by surprise.
+  const reject = (id) => moderate(id, { status: REVIEW_STATUS.REJECTED, featured: false }, 'rejected');
+  const hide = (id) => moderate(id, { status: REVIEW_STATUS.HIDDEN, featured: false }, 'hidden');
+  const setFeatured = (id, featured) =>
+    moderate(id, { featured }, featured ? 'featured' : 'unfeatured');
 
   return (
     <div className="adm-page">
@@ -151,6 +193,7 @@ export default function Reviews() {
               {s} ({counts[s]})
             </option>
           ))}
+          <option value="featured">featured ({counts.featured})</option>
         </select>
       </PageHeader>
 
@@ -180,7 +223,9 @@ export default function Reviews() {
         <div className="adm-stack">
           {filtered.map((r) => {
             const pending = r.status === REVIEW_STATUS.PENDING;
+            const approved = r.status === REVIEW_STATUS.APPROVED;
             const busy = updatingId === r.id;
+            const ownerUid = ownerByReviewId.get(r.id);
             return (
               <div
                 key={r.id}
@@ -194,11 +239,13 @@ export default function Reviews() {
                         {productNames.get(r.productId) || r.productId}
                       </p>
                       <ReviewStatusBadge status={r.status} />
+                      {approved && r.featured && <FeaturedBadge />}
                       <Stars rating={r.rating} />
                     </div>
 
                     <p className="adm-row-sub" style={{ whiteSpace: 'normal' }}>
-                      {r.displayName} | uid {r.uid.slice(0, 8)}…
+                      {r.displayName}
+                      {ownerUid ? ` | uid ${ownerUid.slice(0, 8)}…` : ''}
                     </p>
 
                     <p className="adm-body-text" style={{ whiteSpace: 'pre-line' }}>
@@ -214,24 +261,32 @@ export default function Reviews() {
                     <div className="adm-iconrow" style={{ flexWrap: 'wrap', gap: '0.4rem' }}>
                       <button
                         className="adm-btn"
-                        disabled={busy || r.status === REVIEW_STATUS.APPROVED}
-                        onClick={() => setStatus(r.id, REVIEW_STATUS.APPROVED)}
+                        disabled={busy || approved}
+                        onClick={() => approve(r.id)}
                       >
                         <Check size={13} /> Approve
                       </button>
                       <button
                         className="adm-btn"
                         disabled={busy || r.status === REVIEW_STATUS.REJECTED}
-                        onClick={() => setStatus(r.id, REVIEW_STATUS.REJECTED)}
+                        onClick={() => reject(r.id)}
                       >
                         <X size={13} /> Reject
                       </button>
                       <button
                         className="adm-btn"
                         disabled={busy || r.status === REVIEW_STATUS.HIDDEN}
-                        onClick={() => setStatus(r.id, REVIEW_STATUS.HIDDEN)}
+                        onClick={() => hide(r.id)}
                       >
                         <EyeOff size={13} /> Hide
+                      </button>
+                      <button
+                        className="adm-btn"
+                        disabled={busy || !approved}
+                        title={approved ? undefined : 'Only approved reviews can be featured'}
+                        onClick={() => setFeatured(r.id, !r.featured)}
+                      >
+                        <Sparkles size={13} /> {r.featured ? 'Unfeature' : 'Feature'}
                       </button>
                     </div>
                   </div>

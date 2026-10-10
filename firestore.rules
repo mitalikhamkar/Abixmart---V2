@@ -1,0 +1,377 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+
+    // ─────────────────────────────────────────────
+    // ADMINS
+    // ─────────────────────────────────────────────
+
+    match /admins/{adminUid} {
+      allow get: if isOwner(adminUid) || isAdmin();
+      allow list: if isAdmin();
+      allow write: if false;
+    }
+
+
+    // ─────────────────────────────────────────────
+    // USERS
+    // ─────────────────────────────────────────────
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if false;
+    }
+
+
+    // ─────────────────────────────────────────────
+    // PRODUCTS
+    // ─────────────────────────────────────────────
+    //
+    // Customer website:
+    //   - Can read only published/coming-soon products.
+    //   - Draft and archived products are hidden.
+    //
+    // Admin:
+    //   - Can read all products.
+    //   - Can create/update/archive products.
+    //
+    // ─────────────────────────────────────────────
+
+    match /products/{productId} {
+      allow get, list: if isAdmin()
+        || resource.data.status in ['available', 'coming_soon'];
+
+      allow write: if isAdmin();
+    }
+
+
+    // ─────────────────────────────────────────────
+    // ORDERS
+    // ─────────────────────────────────────────────
+
+    match /orders/{orderId} {
+      allow get: if isAdmin() ||
+        (isSignedIn() && resource.data.uid == request.auth.uid);
+
+      // Customers can list only their own orders.
+      allow list: if isAdmin() ||
+        (isSignedIn() && resource.data.uid == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+        request.resource.data.uid == request.auth.uid;
+
+      allow update, delete: if isAdmin();
+    }
+
+
+    // ─────────────────────────────────────────────
+    // INQUIRIES
+    // ─────────────────────────────────────────────
+
+    match /inquiries/{inquiryId} {
+      allow create: if true;
+      allow get, list: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+
+    // ─────────────────────────────────────────────
+    // PRODUCT NOTIFICATIONS
+    // ─────────────────────────────────────────────
+
+    match /productNotifications/{docId} {
+      allow get: if isSignedIn() &&
+        docId.split('_')[0] == request.auth.uid;
+
+      allow list: if isAdmin();
+
+      allow create: if isSignedIn()
+        && docId == request.auth.uid + '_' + request.resource.data.productId
+        && request.resource.data.uid == request.auth.uid;
+
+      allow update, delete: if isAdmin();
+    }
+
+
+    // ─────────────────────────────────────────────
+    // PROMO CODES
+    // ─────────────────────────────────────────────
+
+    match /promoCodes/{promoId} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+
+    // ─────────────────────────────────────────────
+    // COMMUNITY SELECTIONS
+    // ─────────────────────────────────────────────
+
+    match /communitySelections/{selectionId} {
+      allow get, list: if true;
+      allow write: if isAdmin();
+    }
+
+
+    // ─────────────────────────────────────────────
+    // CART
+    // ─────────────────────────────────────────────
+
+    match /cart/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+
+    // ─────────────────────────────────────────────
+    // WISHLIST
+    // ─────────────────────────────────────────────
+
+    match /wishlist/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+
+    // ─────────────────────────────────────────────
+    // CARTS
+    // ─────────────────────────────────────────────
+
+    match /carts/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+
+
+    // ─────────────────────────────────────────────
+    // WISHLISTS
+    // ─────────────────────────────────────────────
+
+    match /wishlists/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+
+
+    // ─────────────────────────────────────────────
+    // ADMIN SETTINGS
+    // ─────────────────────────────────────────────
+
+    match /adminSettings/{docId} {
+      allow get, list: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+
+    // ─────────────────────────────────────────────
+    // PRODUCT REVIEWS  (data model revision 2)
+    // ─────────────────────────────────────────────
+    //
+    //   reviews/{autoId}                 public content, NO uid
+    //   reviewOwners/{uid}_{productId}   private ownership record
+    //   reviewModeration/{reviewId}      private admin audit
+    //
+    // Public:    can list/read only status == 'approved' reviews.
+    // Customer:  creates a review as 'pending' together with its owner
+    //            record in ONE atomic batch. The owner record's id
+    //            (uid + '_' + productId) makes it one review per customer
+    //            per product. Can read their own review in any status and
+    //            edit it while pending/approved (an edit sends it back to
+    //            'pending' and never touches the owner record). Can never
+    //            set status to anything but 'pending', and can never set
+    //            'featured' to anything but false: an edit clears a
+    //            featured flag, so edited text is never featured again
+    //            unless an admin re-features it.
+    // Admin:     can read everything. Moderation may change ONLY
+    //            status / featured / updatedAt / moderatedAt. Text, rating,
+    //            productId and displayName are untouchable. The acting
+    //            admin is recorded in reviewModeration, never on the public
+    //            review.
+    //
+    // Review documents hold a shortened display name ("Mitali K."), never
+    // an email address, phone number or uid.
+
+    match /reviews/{reviewId} {
+
+      function validRating() {
+        return request.resource.data.rating is int
+          && request.resource.data.rating >= 1
+          && request.resource.data.rating <= 5;
+      }
+
+      function validText() {
+        return request.resource.data.text is string
+          && request.resource.data.text.size() >= 10
+          && request.resource.data.text.size() <= 1000;
+      }
+
+      function validName() {
+        return request.resource.data.displayName is string
+          && request.resource.data.displayName.size() >= 1
+          && request.resource.data.displayName.size() <= 60;
+      }
+
+      // The caller's owner record for a product, as stored.
+      function ownerRecord(productId) {
+        return get(/databases/$(database)/documents/reviewOwners/$(request.auth.uid + '_' + productId)).data;
+      }
+
+      // The signed-in customer owns this review when THEIR stored owner
+      // record (uid field matches the authenticated uid) points at it.
+      function ownsReview(productId) {
+        return isSignedIn()
+          && ownerRecord(productId).uid == request.auth.uid
+          && ownerRecord(productId).reviewId == reviewId;
+      }
+
+      function productIsReviewable(productId) {
+        return get(/databases/$(database)/documents/products/$(productId)).data.status == 'available';
+      }
+
+      // Single reads. A signed-in read of a review that does not exist is
+      // allowed (it just returns "not found").
+      allow get: if isAdmin()
+        || (isSignedIn() && resource == null)
+        || (resource != null && resource.data.status == 'approved')
+        || (resource != null && ownsReview(resource.data.productId));
+
+      // List queries must filter by status == 'approved'. Admins can list
+      // anything. Customers read their own review with a single get.
+      allow list: if isAdmin()
+        || resource.data.status == 'approved';
+
+      // The review must be created in the same batch as its owner record
+      // (getAfter), and that owner record must be this caller's.
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(
+             ['productId', 'displayName', 'rating', 'text', 'status', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasAll(
+             ['productId', 'displayName', 'rating', 'text', 'status', 'createdAt', 'updatedAt'])
+        && request.resource.data.productId is string
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && validRating()
+        && validText()
+        && validName()
+        && productIsReviewable(request.resource.data.productId)
+        && getAfter(/databases/$(database)/documents/reviewOwners/$(request.auth.uid + '_' + request.resource.data.productId)).data.reviewId == reviewId
+        && getAfter(/databases/$(database)/documents/reviewOwners/$(request.auth.uid + '_' + request.resource.data.productId)).data.uid == request.auth.uid;
+
+      // Customer edit: their own review, goes back to pending, writable
+      // fields only. Rejected/hidden reviews cannot be edited.
+      //
+      // 'featured' may appear in the write ONLY as the boolean false, so
+      // editing a featured review must clear the flag (the resulting
+      // document may never have featured == true). An edit that omits the
+      // field is accepted only when the stored review is not featured.
+      // Customers can therefore never feature a review, and edited text
+      // can never come back featured on re-approval.
+      allow update: if isSignedIn()
+        && ownsReview(resource.data.productId)
+        && resource.data.status in ['pending', 'approved']
+        && request.resource.data.status == 'pending'
+        && request.resource.data.productId == resource.data.productId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['rating', 'text', 'displayName', 'status', 'featured', 'updatedAt'])
+        && request.resource.data.get('featured', false) == false
+        && validRating()
+        && validText()
+        && validName();
+
+      // Admin moderation. Only these four fields may change, so text,
+      // rating, productId, displayName, createdAt and moderatedBy are
+      // immutable here. The resulting status must be approved, rejected or
+      // hidden (an admin can never send a review back to 'pending'), and
+      // 'featured' must be a boolean that can only be true on an approved
+      // review. Both timestamps must be the server time.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'featured', 'updatedAt', 'moderatedAt'])
+        && request.resource.data.status in ['approved', 'rejected', 'hidden']
+        && request.resource.data.get('featured', false) is bool
+        && (request.resource.data.get('featured', false) == false
+            || request.resource.data.status == 'approved')
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.moderatedAt == request.time;
+
+      allow delete: if isAdmin();
+    }
+
+    // Private ownership record: one review per customer per product.
+    match /reviewOwners/{ownerId} {
+
+      // Used ONLY for a record that does not exist yet, so a customer
+      // reading their own (missing) record gets "not found" rather than a
+      // permission error. The uid is checked as a literal prefix, never by
+      // splitting the id on '_'. Existing records are always checked
+      // against their stored uid field instead.
+      function callerPrefixMatches() {
+        return request.auth.uid.matches('[A-Za-z0-9_-]+')
+          && ownerId.matches(request.auth.uid + '_.+');
+      }
+
+      allow get: if isAdmin()
+        || (isSignedIn() && resource != null && resource.data.uid == request.auth.uid)
+        || (isSignedIn() && resource == null && callerPrefixMatches());
+      allow list: if isAdmin();
+
+      // The record may only be created in the same batch as the review it
+      // points to: that review must NOT exist before the batch (exists) and
+      // MUST exist after it (existsAfter), with a matching productId and
+      // pending status. This blocks claiming any pre-existing review.
+      allow create: if isSignedIn()
+        && ownerId == request.auth.uid + '_' + request.resource.data.productId
+        && request.resource.data.keys().hasOnly(['uid', 'productId', 'reviewId', 'createdAt'])
+        && request.resource.data.keys().hasAll(['uid', 'productId', 'reviewId', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.productId is string
+        && request.resource.data.reviewId is string
+        && request.resource.data.createdAt == request.time
+        && !exists(/databases/$(database)/documents/reviews/$(request.resource.data.reviewId))
+        && existsAfter(/databases/$(database)/documents/reviews/$(request.resource.data.reviewId))
+        && getAfter(/databases/$(database)/documents/reviews/$(request.resource.data.reviewId)).data.productId == request.resource.data.productId
+        && getAfter(/databases/$(database)/documents/reviews/$(request.resource.data.reviewId)).data.status == 'pending';
+
+      allow update: if false;
+
+      // Customers may clear their own record only when its review is gone.
+      allow delete: if isAdmin()
+        || (isSignedIn()
+            && resource.data.uid == request.auth.uid
+            && !exists(/databases/$(database)/documents/reviews/$(resource.data.reviewId)));
+    }
+
+    // Private admin audit trail: one record per review, written by the
+    // admin screen in the same batch as the moderation change.
+    match /reviewModeration/{reviewId} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['reviewId', 'lastAction', 'moderatedBy', 'moderatedAt'])
+        && request.resource.data.keys().hasAll(['reviewId', 'lastAction', 'moderatedBy', 'moderatedAt'])
+        && request.resource.data.reviewId == reviewId
+        && request.resource.data.lastAction in ['approved', 'rejected', 'hidden', 'featured', 'unfeatured']
+        && request.resource.data.moderatedBy == request.auth.uid
+        && request.resource.data.moderatedAt == request.time;
+      allow delete: if isAdmin();
+    }
+  }
+}

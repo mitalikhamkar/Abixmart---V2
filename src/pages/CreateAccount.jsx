@@ -1,11 +1,12 @@
 import React, { useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import PageTransition from '@/components/abix/PageTransition';
 import CinematicAuthShell from '@/components/abix/CinematicAuthShell';
 import GoogleButton from '@/components/abix/GoogleButton';
 import { useAuth } from '@/lib/AuthContext';
 import { mapAuthError } from '@/lib/authErrors';
+import { safeRedirectPath } from '@/lib/safeRedirect';
 import registerImage from '@/assets/authentication/register.png';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -40,6 +41,11 @@ function Field({ label, error, children, extra }) {
 export default function CreateAccount() {
   const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // NEW: optional same-site "return to" path (see Login.jsx).
+  const returnTo = safeRedirectPath(searchParams.get('redirect'));
+  const loginTo = returnTo ? `/login?redirect=${encodeURIComponent(returnTo)}` : '/login';
 
   const [form, setForm] = useState({ fullName: '', phone: '', email: '', password: '', confirmPassword: '' });
   const [fieldErrors, setFieldErrors] = useState({});
@@ -64,7 +70,7 @@ export default function CreateAccount() {
     setGoogleLoading(true);
     try {
       const user = await loginWithGoogle();
-      if (user) navigate('/account');
+      if (user) navigate(returnTo || '/account', { replace: Boolean(returnTo) });
     } catch (err) {
       setFormError(mapAuthError(err));
     } finally {
@@ -121,7 +127,7 @@ export default function CreateAccount() {
           submitted ? null : (
             <>
               Already have an account?{' '}
-              <Link to="/login" className="text-gold-light font-medium hover:text-ivory transition-colors">
+              <Link to={loginTo} className="text-gold-light font-medium hover:text-ivory transition-colors">
                 Login
               </Link>
             </>
@@ -149,9 +155,15 @@ export default function CreateAccount() {
                 inbox — and your spam or promotions folder — then verify to unlock the full ABIXMART experience.
               </p>
             )}
-            <Link to="/login" className="btn-primary-inverse mt-6 inline-flex">
-              Go to Login
-            </Link>
+            {returnTo ? (
+              <Link to={returnTo} replace className="btn-primary-inverse mt-6 inline-flex">
+                Continue
+              </Link>
+            ) : (
+              <Link to="/login" className="btn-primary-inverse mt-6 inline-flex">
+                Go to Login
+              </Link>
+            )}
           </div>
         ) : (
           <>

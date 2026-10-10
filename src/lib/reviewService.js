@@ -91,6 +91,10 @@ export async function getMyReview(productId, uid) {
 // review returned by getMyReview). Either way the review goes (back) to
 // `pending`: customers can never set their own status, and the Firestore
 // rules reject any attempt to.
+//
+// An edit also always writes `featured: false`. The rules only accept an
+// edit whose resulting review is not featured, so edited text can never stay
+// (or come back) featured without an admin featuring it again.
 export async function submitReview({ productId, user, profile, rating, text, existing }) {
   const displayName = formatReviewerName(profile, user);
 
@@ -100,6 +104,7 @@ export async function submitReview({ productId, user, profile, rating, text, exi
       text,
       displayName,
       status: REVIEW_STATUS.PENDING,
+      featured: false,
       updatedAt: serverTimestamp(),
     });
     return;
