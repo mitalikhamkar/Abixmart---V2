@@ -19,19 +19,36 @@ import { ABIX } from '@/components/abix/brandColors';
 // step that recognizes saved Profile information (name/phone/address)
 // and shows it for review instead of asking the user to retype it.
 //
-// CHANGED (this task) — customers with a saved address now get an
-// explicit choice: "Use your saved address" or "Use a different
-// address". After an order is placed, the delivery address is saved to
-// the existing profile document (via updateUserProfile) so it shows in
-// Profile → Addresses and is offered on the next checkout.
+// CHANGED — customers with a saved address get an explicit choice:
+// "Use your saved address" or "Use a different address". After an order
+// is placed, the delivery address is saved to the existing profile
+// document (via updateUserProfile).
 //
 // CHANGED — Order confirmation renders a snapshot of the order that was
 // just placed (taken BEFORE clearCart() runs).
 //
-// No Firebase/order-creation/payment logic changed: createOrder(),
-// its argument shape, and cartItems/cartTotal all come from the same
-// places they did before.
+// CHANGED (this task) — COD only. Cash on Delivery is the only
+// customer-facing payment option. UPI and Card are hidden from the UI for
+// now; nothing here initializes Razorpay or any online payment flow.
+// createOrder() and its argument shape are unchanged — it now always
+// receives paymentMethod: 'COD'.
+//
+// TO RE-ENABLE ONLINE PAYMENTS LATER: add entries to PAYMENT_OPTIONS
+// below, restore a `payment` field to the form state, and pass it to
+// createOrder() instead of PAYMENT_METHOD_COD.
 const steps = ['Items', 'Delivery', 'Payment', 'Confirm'];
+
+const PAYMENT_METHOD_COD = 'COD';
+const PAYMENT_LABEL_COD = 'Cash on Delivery';
+
+// The only payment option customers can see right now.
+const PAYMENT_OPTIONS = [
+  {
+    id: PAYMENT_METHOD_COD,
+    label: PAYMENT_LABEL_COD,
+    note: 'Pay in cash when your order arrives.',
+  },
+];
 
 const INK = ABIX.obsidian;
 const CARD = ABIX.espresso;
@@ -76,7 +93,6 @@ export default function CheckoutModal() {
   const [form, setForm] = useState({
     fullName: '', email: '', phone: '',
     address: '', city: '', state: '', pincode: '', country: 'India',
-    payment: 'COD',
   });
   // 'saved' shows the read-only saved-profile card; 'new' reveals the
   // editable address form (either because the user chose "Use a
@@ -110,7 +126,6 @@ export default function CheckoutModal() {
         state: profile?.state || '',
         pincode: profile?.pincode || '',
         country: profile?.country || 'India',
-        payment: 'COD',
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -208,7 +223,9 @@ export default function CheckoutModal() {
         subtotal: cartTotal,
         shipping,
         total,
-        paymentMethod: form.payment,
+        // COD only: always the same 'COD' value the admin Orders screen
+        // already knows. No online payment flow is started.
+        paymentMethod: PAYMENT_METHOD_COD,
       });
 
       // Save the delivery address to the account. Best-effort: a failure
@@ -246,13 +263,16 @@ export default function CheckoutModal() {
         total,
         items,
         itemCount: items.reduce((n, it) => n + it.qty, 0),
+        paymentLabel: PAYMENT_LABEL_COD,
       });
       clearCart();
       setPlaced(true);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[ABIXMART] Failed to create order', err?.code, err?.message, err);
-      setOrderError('Something went wrong placing your order. Please try again.');
+      // OrderValidationError (price changed, item unavailable, ...) carries
+      // a customer-safe message; anything else gets the generic one.
+      setOrderError(err?.userMessage || 'Something went wrong placing your order. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -283,7 +303,7 @@ export default function CheckoutModal() {
           >
             <div className="flex items-center gap-3">
               {step > 0 && !placed && (
-                <button onClick={back} style={{ color: MUTED }} className="hover:opacity-80 transition-opacity">
+                <button onClick={back} aria-label="Back" style={{ color: MUTED }} className="hover:opacity-80 transition-opacity">
                   <ArrowLeft size={20} />
                 </button>
               )}
@@ -291,7 +311,7 @@ export default function CheckoutModal() {
                 {placed ? 'Order placed' : 'Checkout'}
               </span>
             </div>
-            <button onClick={closeCheckout} style={{ color: MUTED }} className="hover:opacity-80 transition-opacity">
+            <button onClick={closeCheckout} aria-label="Close checkout" style={{ color: MUTED }} className="hover:opacity-80 transition-opacity">
               <X size={20} />
             </button>
           </div>
@@ -358,9 +378,6 @@ export default function CheckoutModal() {
                     <div>
                       <h3 className="font-display text-2xl" style={{ color: IVORY }}>Order Summary</h3>
                       <div className="mt-5 space-y-3">
-                        {/* FIXED: was reading product.image (a Base44
-                            placeholder URL) — now uses product.shopImage,
-                            the same real ABIXMART asset Cart.jsx uses. */}
                         {cartItems.map(({ id, variantId, variantLabel, qty, product, unitPrice, subtotal }) => (
                           <div
                             key={`${id}:${variantId || ''}`}
@@ -506,28 +523,37 @@ export default function CheckoutModal() {
                   {step === 2 && (
                     <div>
                       <h3 className="font-display text-2xl" style={{ color: IVORY }}>Payment method</h3>
-                      <p className="mt-2 text-sm" style={{ color: MUTED }}>Payment gateway integration is coming soon. This is a prototype.</p>
-                      <div className="mt-6 space-y-3">
-                        {['COD', 'UPI', 'Card'].map((m) => (
-                          <button
-                            key={m}
-                            onClick={() => setForm({ ...form, payment: m })}
-                            className="w-full flex items-center justify-between p-4 rounded-lg transition-colors"
+                      <p className="mt-2 text-sm" style={{ color: MUTED }}>
+                        We currently accept Cash on Delivery only.
+                      </p>
+                      <div className="mt-6 space-y-3" role="radiogroup" aria-label="Payment method">
+                        {PAYMENT_OPTIONS.map((opt) => (
+                          <div
+                            key={opt.id}
+                            role="radio"
+                            aria-checked="true"
+                            className="w-full flex items-center justify-between p-4 rounded-lg"
                             style={{
-                              border: `1px solid ${form.payment === m ? GOLD_LIGHT : BORDER_STRONG}`,
-                              backgroundColor: form.payment === m ? `${GOLD_LIGHT}14` : 'transparent',
+                              border: `1px solid ${GOLD_LIGHT}`,
+                              backgroundColor: `${GOLD_LIGHT}14`,
                             }}
                           >
-                            <span className="font-display text-lg" style={{ color: IVORY }}>{m === 'COD' ? 'Cash on Delivery' : m}</span>
-                            <span
-                              className="h-5 w-5 rounded-full border-2 flex items-center justify-center"
-                              style={{ borderColor: form.payment === m ? GOLD_LIGHT : BORDER_STRONG }}
-                            >
-                              {form.payment === m && <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: GOLD_LIGHT }} />}
+                            <span>
+                              <span className="block font-display text-lg" style={{ color: IVORY }}>{opt.label}</span>
+                              <span className="block mt-0.5 text-sm" style={{ color: MUTED }}>{opt.note}</span>
                             </span>
-                          </button>
+                            <span
+                              className="h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0"
+                              style={{ borderColor: GOLD_LIGHT }}
+                            >
+                              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: GOLD_LIGHT }} />
+                            </span>
+                          </div>
                         ))}
                       </div>
+                      <p className="mt-5 text-sm leading-relaxed" style={{ color: MUTED }}>
+                        Please keep ₹{total} ready when your order arrives.
+                      </p>
                     </div>
                   )}
 
@@ -535,12 +561,7 @@ export default function CheckoutModal() {
                     <div>
                       <h3 className="font-display text-2xl" style={{ color: IVORY }}>Confirm your order</h3>
                       <div className="mt-5 space-y-3 text-sm">
-                        {/* FIXED: previously recomputed product.price × qty
-                            here, which silently overrode the correct
-                            ritual/package price. Now uses the same
-                            variant-aware unitPrice/subtotal as every
-                            other cart display. */}
-                        {cartItems.map(({ id, variantId, variantLabel, qty, unitPrice, subtotal, product }) => (
+                        {cartItems.map(({ id, variantId, variantLabel, qty, subtotal, product }) => (
                           <Row
                             key={`${id}:${variantId || ''}`}
                             label={`${product.name}${variantLabel ? ` — ${variantLabel}` : ''}`}
@@ -551,13 +572,13 @@ export default function CheckoutModal() {
                         <Row label="Email" value={form.email} />
                         <Row label="Phone" value={form.phone} />
                         <Row label="Address" value={`${form.address}, ${form.city}, ${form.state} ${form.pincode}, ${form.country}`} />
-                        <Row label="Payment" value={form.payment === 'COD' ? 'Cash on Delivery' : form.payment} />
+                        <Row label="Payment" value={PAYMENT_LABEL_COD} />
                         <div className="border-t pt-3 flex items-center justify-between" style={{ borderColor: BORDER }}>
                           <span className="font-display text-lg" style={{ color: IVORY }}>Total</span>
                           <span className="text-2xl" style={{ color: IVORY }}>₹{total}</span>
                         </div>
                       </div>
-                      {orderError && <p className="mt-4 text-sm" style={{ color: '#F3A6A6' }}>{orderError}</p>}
+                      {orderError && <p className="mt-4 text-sm" role="alert" style={{ color: '#F3A6A6' }}>{orderError}</p>}
                     </div>
                   )}
                 </motion.div>
@@ -593,7 +614,7 @@ export default function CheckoutModal() {
                   </button>
                 )}
                 <p className="mt-4 text-center text-xs" style={{ color: MUTED }}>
-                  Prototype checkout — no real payment is processed.
+                  Pay with cash when your order is delivered.
                 </p>
               </div>
             )}
@@ -623,7 +644,6 @@ function Row({ label, value }) {
 }
 
 // Radio-style option used for the saved / different address choice.
-// Same look as the payment-method options in step 2.
 function AddressChoice({ selected, title, actionLabel, onSelect }) {
   return (
     <button
@@ -657,7 +677,7 @@ function AddressChoice({ selected, title, actionLabel, onSelect }) {
 // SMS or WhatsApp confirmations.
 function Confirmation({ order, onClose }) {
   if (!order) return null;
-  const { orderId, fullName, phone, total, items, itemCount } = order;
+  const { orderId, fullName, phone, total, items, itemCount, paymentLabel } = order;
 
   return (
     <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-6">
@@ -685,6 +705,13 @@ function Confirmation({ order, onClose }) {
       <div className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm" style={{ backgroundColor: CARD, color: IVORY }}>
         Order total <span className="text-lg">₹{total}</span>
       </div>
+
+      <p className="mt-4 text-sm" style={{ color: IVORY }}>
+        Payment: {paymentLabel || PAYMENT_LABEL_COD}
+      </p>
+      <p className="mt-1 text-xs" style={{ color: MUTED }}>
+        Please keep ₹{total} ready at delivery.
+      </p>
 
       {orderId && (
         <p className="mt-4 text-xs lining-nums tabular-nums" style={{ color: MUTED }}>

@@ -8,6 +8,11 @@ import logo from '@/assets/logo/Abixmart-full.png';
 import footerImg from '@/assets/home/footer.png';
 import { ABIX } from '@/components/abix/brandColors';
 
+// TODO: replace with the real ABIXMART handles. These are the values that
+// were already in the file (placeholders).
+const INSTAGRAM_URL = 'https://instagram.com';
+const WHATSAPP_URL = 'https://wa.me/910000000000';
+
 export default function Footer() {
   const sectionRef = useRef(null);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -22,17 +27,19 @@ export default function Footer() {
 
   return (
     <footer id="footer" ref={sectionRef} className="relative overflow-hidden grain">
-      {/* CHANGED: gradient now runs Deep Botanical → Obsidian Forest —
-          the footer image stays visible near the top, then the page
-          resolves into the darkest tone on the site by the bottom
-          edge, replacing the removed ABIX.stoneDeep token. */}
-            <div className="absolute inset-0">
+      <div className="absolute inset-0">
         <img src={footerImg} alt="" className="w-full h-full object-cover" aria-hidden="true" />
         <div
           className="absolute inset-0"
           style={{
             background: `linear-gradient(180deg, rgba(9,17,11,0.25) 0%, ${ABIX.deep}e6 50%, ${ABIX.obsidian}f7 100%)`,
           }}
+        />
+        {/* rises out of the reviews section (flat obsidian) with no seam */}
+        <div
+          className="absolute inset-x-0 top-0 h-40 lg:h-56 pointer-events-none"
+          style={{ background: `linear-gradient(180deg, ${ABIX.obsidian} 0%, transparent 100%)` }}
+          aria-hidden="true"
         />
       </div>
 
@@ -67,15 +74,32 @@ export default function Footer() {
           </div>
 
           <div className="flex items-center gap-3 pb-8">
-            <a href="https://instagram.com" target="_blank" rel="noreferrer" className="h-10 w-10 inline-flex items-center justify-center border transition-colors hover:opacity-80" style={{ borderColor: ABIX.ivory25, color: ABIX.ivory }} aria-label="Instagram">
+            <a
+              href={INSTAGRAM_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="h-10 w-10 inline-flex items-center justify-center border transition-colors hover:opacity-80"
+              style={{ borderColor: ABIX.ivory25, color: ABIX.ivory }}
+              aria-label="Instagram"
+            >
               <Instagram size={16} />
             </a>
-            <a href="https://wa.me/910000000000" target="_blank" rel="noreferrer" className="h-10 w-10 inline-flex items-center justify-center border transition-colors hover:opacity-80" style={{ borderColor: ABIX.ivory25, color: ABIX.ivory }} aria-label="WhatsApp">
+            <a
+              href={WHATSAPP_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="h-10 w-10 inline-flex items-center justify-center border transition-colors hover:opacity-80"
+              style={{ borderColor: ABIX.ivory25, color: ABIX.ivory }}
+              aria-label="WhatsApp"
+            >
               <MessageCircle size={16} />
             </a>
           </div>
 
-          <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs" style={{ borderTop: `1px solid ${ABIX.ivory12}`, color: ABIX.ivory45 }}>
+          <div
+            className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs"
+            style={{ borderTop: `1px solid ${ABIX.ivory12}`, color: ABIX.ivory45 }}
+          >
             <span>© {new Date().getFullYear()} ABIXMART. Crafted with intention.</span>
             <div className="flex items-center gap-5">
               {footerLinks.legal?.map((l) => (

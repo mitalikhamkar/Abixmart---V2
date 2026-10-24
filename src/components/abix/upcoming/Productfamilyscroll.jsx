@@ -1,326 +1,477 @@
 // src/components/abix/upcoming/ProductFamilyScroll.jsx
 //
-// "What's growing next" product family. On large screens a pinned stage
-// advances through the family as the visitor scrolls: Shilajit (available
-// now) first, then each Coming Soon product. On small screens it becomes a
-// stacked, reveal-on-scroll list.
+// "The Living Collection": upcoming products only, in a fixed order.
 //
-// Data comes from the Firestore-backed catalog (useCatalog), the same source
-// as the Shop and About marquee. Nothing is hard-coded or invented here.
+// Desktop: a pinned stage. Every product's visual and text is mounted once;
+// the active step is plain state, and a step change only toggles opacity and
+// transform (CSS transitions). Because it is state, not a one-shot
+// animation, scrolling back up replays every step. The scroll handler runs
+// once per frame and updates React only when the step changes.
+//
+// Mobile, tablet and reduced motion: a compact stacked list. Nothing starts
+// hidden, so content can never get stuck invisible.
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  AnimatePresence,
-  motion,
-  useMotionValueEvent,
-  useReducedMotion,
-  useScroll,
-  useTransform,
-} from 'framer-motion';
+import { useReducedMotion } from 'framer-motion';
 import { useCatalog } from '@/lib/CatalogContext';
-import { useUpcoming } from '@/lib/upcomingContext';
 import { ABIX } from '@/components/abix/brandColors';
+import Botanical from '@/components/abix/upcoming/livingCollection/Botanicals';
+import {
+  ConceptualTag,
+  FinaleGallery,
+  ItemActions,
+  ProductImage,
+  StatusPill,
+} from '@/components/abix/upcoming/livingCollection/CollectionParts';
+import { FOCUS_RING, FOREST, pad, textOf } from '@/components/abix/upcoming/livingCollection/theme';
 
-const EASE = [0.16, 1, 0.3, 1];
-const pad = (n) => String(n).padStart(2, '0');
-const isAvailableProduct = (p) => p.status === 'available';
-const textOf = (p) => p.description || p.note || null;
+const DESKTOP_QUERY = '(min-width: 1024px)';
+const ORDER = ['orthoveda', 'dayaveda', 'triphala', 'ashwagandha'];
+const SMOOTH = 'cubic-bezier(0.16, 1, 0.3, 1)';
+const STEP_VH = 70; // scroll distance per product
 
-function StatusPill({ available }) {
+const orderOf = (p) => {
+  const i = ORDER.indexOf(p.id);
+  return i === -1 ? ORDER.length : i;
+};
+
+// Mount only the layout that is needed, so the other one never loads images.
+function useIsDesktop() {
+  const [matches, setMatches] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(DESKTOP_QUERY).matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(DESKTOP_QUERY);
+    const onChange = () => setMatches(mq.matches);
+    onChange();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return matches;
+}
+
+// Transition for opacity + transform. The delay applies only when entering,
+// so leaving is immediate and the next step never waits on the previous one.
+const move = (active, delay = 0) => {
+  const d = active ? delay : 0;
+  return `opacity 0.6s ease ${d}s, transform 0.9s ${SMOOTH} ${d}s`;
+};
+
+// Hidden steps are visibility:hidden (after their fade-out), which also
+// removes their buttons from keyboard focus and screen readers.
+const visibility = (active) => ({
+  visibility: active ? 'visible' : 'hidden',
+  transition: `visibility 0s linear ${active ? 0 : 0.8}s`,
+});
+
+const enter = (active, i) => ({
+  opacity: active ? 1 : 0,
+  transform: active ? 'translate3d(0,0,0)' : 'translate3d(0,14px,0)',
+  transition: move(active, 0.1 + i * 0.07),
+});
+
+/* ───────────────────────── Desktop: pinned stage ───────────────────────── */
+
+function TextBlock({ item, index, active }) {
+  const text = textOf(item);
   return (
-    <span
-      className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-luxe-sm"
-      style={{ color: available ? ABIX.gold : ABIX.goldLight }}
-    >
-      <span
-        className="h-1.5 w-1.5 rounded-full"
-        style={{ background: available ? ABIX.gold : 'transparent', border: `1px solid ${ABIX.gold}` }}
-      />
-      {available ? 'Available now' : 'Coming Soon'}
-    </span>
+    <div style={{ gridArea: '1 / 1', ...visibility(active) }}>
+      <p className="font-grotesk text-[11px] uppercase tracking-luxe-sm" style={{ color: ABIX.gold, ...enter(active, 0) }}>
+        Chapter {pad(index + 1)}
+      </p>
+      <div className="mt-4" style={enter(active, 1)}><StatusPill available={false} /></div>
+      <h3
+        className="mt-4 font-display text-5xl xl:text-6xl leading-[1.02] tracking-tight"
+        style={{ color: ABIX.ivory, ...enter(active, 2) }}
+      >
+        {item.name}
+      </h3>
+      {item.shortDesc && (
+        <p className="mt-3 font-display text-xl xl:text-2xl italic" style={{ color: ABIX.goldLight, ...enter(active, 3) }}>
+          {item.shortDesc}
+        </p>
+      )}
+      {text && (
+        <p
+          className="mt-4 max-w-md text-base leading-relaxed"
+          style={{
+            color: ABIX.ivory70,
+            display: '-webkit-box',
+            WebkitLineClamp: 4,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            ...enter(active, 4),
+          }}
+        >
+          {text}
+        </p>
+      )}
+      <div style={enter(active, 5)}><ItemActions item={item} /></div>
+    </div>
   );
 }
 
-function ItemActions({ item }) {
-  const { openView, openPreOrder } = useUpcoming();
-
-  if (isAvailableProduct(item)) {
-    return (
-      <div className="mt-8">
+function FinaleBlock({ count, active }) {
+  return (
+    <div style={{ gridArea: '1 / 1', ...visibility(active) }}>
+      <p className="font-grotesk text-[11px] uppercase tracking-luxe-sm" style={{ color: ABIX.gold, ...enter(active, 0) }}>
+        The whole collection
+      </p>
+      <h3
+        className="mt-4 font-display text-5xl xl:text-6xl leading-[1.02] tracking-tight"
+        style={{ color: ABIX.ivory, ...enter(active, 1) }}
+      >
+        One family, growing together.
+      </h3>
+      <p className="mt-4 max-w-md text-base leading-relaxed" style={{ color: ABIX.ivory70, ...enter(active, 2) }}>
+        {count} product{count === 1 ? ' is' : 's are'} still in development.
+      </p>
+      <div className="mt-8" style={enter(active, 3)}>
         <Link
-          to={`/shop/${item.slug}`}
-          className="inline-flex items-center justify-center h-12 px-8 text-[11px] font-semibold tracking-luxe-sm uppercase border transition-colors duration-300 hover:bg-white/10"
-          style={{ borderColor: ABIX.ivory25, color: ABIX.ivory }}
+          to="/shop"
+          className={`inline-flex items-center justify-center h-12 px-8 text-[11px] font-semibold tracking-luxe-sm uppercase ${FOCUS_RING}`}
+          style={{ background: ABIX.gold, color: FOREST.deepest }}
         >
-          Explore product
-          <span className="ml-3">→</span>
+          Explore the collection
+          <span className="ml-3" aria-hidden="true">→</span>
         </Link>
       </div>
-    );
-  }
-
-  return (
-    <>
-      <div className="mt-8 flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={() => openView(item)}
-          className="inline-flex items-center justify-center h-12 px-7 text-[11px] font-semibold tracking-luxe-sm uppercase border transition-colors duration-300 hover:bg-white/10"
-          style={{ borderColor: ABIX.ivory25, color: ABIX.ivory }}
-        >
-          Discover
-        </button>
-        <button
-          type="button"
-          onClick={() => openPreOrder(item)}
-          className="inline-flex items-center justify-center h-12 px-7 text-[11px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300"
-          style={{ background: ABIX.gold, color: ABIX.obsidian }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = ABIX.goldLight; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = ABIX.gold; }}
-        >
-          Pre-order
-        </button>
-      </div>
-      <p className="mt-3 max-w-sm text-xs leading-relaxed" style={{ color: ABIX.ivory45 }}>
-        Pre-order is an expression of interest only. It is not an order, a reservation or a payment.
-      </p>
-    </>
+    </div>
   );
 }
 
-function StageImage({ product, active, reduce }) {
+// One product's layered visual: back silhouette, image panel, gold frame and
+// front silhouette. Only opacity and transform change.
+function StageScene({ product, index, active }) {
+  const flip = index % 2 === 1;
+  const radius = flip ? '50% 50% 0 0 / 26% 26% 0 0' : 0;
+
   return (
-    <motion.div
-      className="absolute inset-0"
-      initial={false}
-      animate={{
-        opacity: active ? 1 : 0,
-        clipPath: active ? 'inset(0% 0% 0% 0%)' : 'inset(5% 5% 5% 5%)',
-      }}
-      transition={{ duration: reduce ? 0.1 : 0.8, ease: EASE }}
+    <div
+      className="absolute inset-0 pointer-events-none"
       aria-hidden={!active}
-    >
-      {product.shopImage ? (
-        <motion.img
-          src={product.shopImage}
-          alt={active ? product.name : ''}
-          className="h-full w-full object-cover"
-          initial={false}
-          animate={{ scale: active || reduce ? 1 : 1.08 }}
-          transition={{ duration: reduce ? 0 : 1.6, ease: EASE }}
-        />
-      ) : (
-        <div
-          className="h-full w-full flex items-center justify-center px-8 text-center"
-          style={{ background: `linear-gradient(160deg, ${ABIX.espresso} 0%, ${ABIX.obsidian} 100%)` }}
-        >
-          <span className="font-display text-5xl" style={{ color: ABIX.ivory25 }}>{product.name}</span>
-        </div>
-      )}
-    </motion.div>
-  );
-}
-
-function MobileItem({ item, index, total }) {
-  const available = isAvailableProduct(item);
-  const text = textOf(item);
-
-  return (
-    <motion.article
-      initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-60px' }}
-      transition={{ duration: 0.6, ease: EASE }}
+      style={visibility(active)}
     >
       <div
-        className="relative aspect-[4/5] overflow-hidden"
-        style={{ background: `linear-gradient(160deg, ${ABIX.espresso} 0%, ${ABIX.obsidian} 100%)` }}
+        className="absolute"
+        style={{
+          [flip ? 'left' : 'right']: '-6%',
+          top: '-8%',
+          height: '112%',
+          width: '46%',
+          color: FOREST.leaf,
+          opacity: active ? 0.5 : 0,
+          transform: `translate3d(${active ? 0 : flip ? -24 : 24}px,0,0)`,
+          transition: move(active),
+        }}
       >
-        {item.shopImage ? (
-          <img src={item.shopImage} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
-        ) : (
-          <div className="h-full w-full flex items-center justify-center px-6 text-center">
-            <span className="font-display text-4xl" style={{ color: ABIX.ivory25 }}>{item.name}</span>
-          </div>
-        )}
-        <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(0deg, ${ABIX.obsidian}CC 0%, transparent 50%)` }} />
-        <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: `inset 0 0 0 1px ${ABIX.ivory12}` }} />
-        {!available && (
-          <span className="absolute bottom-4 right-4 text-[10px] tracking-wide" style={{ color: ABIX.ivory45 }}>
-            Conceptual visual
-          </span>
-        )}
+        <Botanical variant={index} className="h-full w-full" />
       </div>
 
-      <div className="mt-6">
+      <div
+        className="absolute overflow-hidden"
+        style={{
+          inset: '5% 9%',
+          borderRadius: radius,
+          background: `linear-gradient(160deg, ${FOREST.moss} 0%, ${FOREST.deepest} 100%)`,
+          boxShadow: '0 24px 50px -28px rgba(0,0,0,0.6)',
+          opacity: active ? 1 : 0,
+          transform: active ? 'translate3d(0,0,0) scale(1)' : 'translate3d(0,18px,0) scale(0.97)',
+          transition: move(active, 0.08),
+        }}
+      >
+        <ProductImage product={product} alt={active ? product.name : ''} eager />
+        <div className="absolute inset-0" style={{ background: `linear-gradient(0deg, ${FOREST.deepest}B3 0%, transparent 42%)` }} />
+        <div className="absolute inset-0" style={{ boxShadow: `inset 0 0 0 1px ${ABIX.ivory12}` }} />
+        <ConceptualTag className="absolute bottom-3 right-4" />
+      </div>
+
+      <div
+        className="absolute"
+        style={{
+          inset: '2% 5% 8% 13%',
+          border: `1px solid ${ABIX.gold25}`,
+          borderRadius: radius,
+          opacity: active ? 1 : 0,
+          transform: active ? 'translate3d(0,0,0)' : 'translate3d(0,16px,0)',
+          transition: move(active, 0.35),
+        }}
+      />
+
+      <div
+        className="absolute"
+        style={{
+          [flip ? 'right' : 'left']: '1%',
+          bottom: '-4%',
+          height: '46%',
+          width: '20%',
+          color: FOREST.lift,
+          opacity: active ? 1 : 0,
+          transform: active ? 'translate3d(0,0,0)' : 'translate3d(0,32px,0)',
+          transition: move(active, 0.2),
+        }}
+      >
+        <Botanical variant={index + 2} className="h-full w-full" />
+      </div>
+    </div>
+  );
+}
+
+function FinaleStage({ items, active }) {
+  return (
+    <div
+      className="absolute inset-0 flex items-center"
+      aria-hidden={!active}
+      style={{
+        ...visibility(active),
+        pointerEvents: active ? 'auto' : 'none',
+        opacity: active ? 1 : 0,
+        transform: active ? 'translate3d(0,0,0)' : 'translate3d(0,20px,0)',
+        transition: `${move(active, 0.1)}, visibility 0s linear ${active ? 0 : 0.8}s`,
+      }}
+    >
+      {[0, 1, 2].map((v) => (
+        <div
+          key={v}
+          aria-hidden="true"
+          className="absolute bottom-0"
+          style={{ left: `${v * 33}%`, height: '100%', width: '30%', color: FOREST.leaf, opacity: 0.3 }}
+        >
+          <Botanical variant={v} className="h-full w-full" />
+        </div>
+      ))}
+      <div className="relative w-full px-2">
+        <FinaleGallery items={items} cols={items.length} stagger />
+      </div>
+    </div>
+  );
+}
+
+function Pinned({ items }) {
+  const trackRef = useRef(null);
+  const barRef = useRef(null);
+  const stepRef = useRef(0);
+  const [step, setStep] = useState(0);
+  const steps = items.length + 1; // every product, then the collection finale
+
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return undefined;
+    let raf = 0;
+
+    const update = () => {
+      raf = 0;
+      const travel = Math.max(1, el.offsetHeight - window.innerHeight);
+      const p = Math.min(1, Math.max(0, -el.getBoundingClientRect().top / travel));
+      if (barRef.current) barRef.current.style.transform = `scaleX(${p})`;
+      const next = Math.min(steps - 1, Math.floor(p * steps));
+      if (next !== stepRef.current) {
+        stepRef.current = next;
+        setStep(next);
+      }
+    };
+    const schedule = () => {
+      if (!raf) raf = window.requestAnimationFrame(update);
+    };
+
+    update();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      if (raf) window.cancelAnimationFrame(raf);
+    };
+  }, [steps]);
+
+  const scrollToStep = useCallback(
+    (i) => {
+      const el = trackRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      const travel = el.offsetHeight - window.innerHeight;
+      window.scrollTo({ top: top + ((i + 0.5) / steps) * travel, behavior: 'smooth' });
+    },
+    [steps]
+  );
+
+  const isFinale = step >= items.length;
+
+  return (
+    <div ref={trackRef} className="relative" style={{ height: `calc(${steps - 1} * ${STEP_VH}vh + 100vh)` }}>
+      <div className="sticky top-0 h-screen overflow-hidden">
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: `radial-gradient(55% 55% at 68% 48%, ${FOREST.glow} 0%, transparent 70%)` }}
+        />
+        <div
+          ref={barRef}
+          aria-hidden="true"
+          className="absolute left-0 top-0 h-px w-full origin-left"
+          style={{ transform: 'scaleX(0)', background: ABIX.gold, willChange: 'transform' }}
+        />
+
+        <div className="relative mx-auto h-full max-w-7xl px-10 grid grid-cols-12 gap-12 items-center">
+          <div className="col-span-5">
+            <p className="font-grotesk text-xs tracking-luxe-sm" style={{ color: ABIX.ivory45 }}>
+              {pad(step + 1)} / {pad(steps)}
+            </p>
+            <div className="mt-6 grid" aria-live="polite">
+              {items.map((p, i) => (
+                <TextBlock key={p.id} item={p} index={i} active={step === i} />
+              ))}
+              <FinaleBlock count={items.length} active={isFinale} />
+            </div>
+          </div>
+
+          <div className="col-span-7">
+            <div className="relative h-[62vh] min-h-[380px] w-full">
+              {items.map((p, i) => (
+                <StageScene key={p.id} product={p} index={i} active={step === i} />
+              ))}
+              <FinaleStage items={items} active={isFinale} />
+            </div>
+
+            <nav aria-label="Collection chapters" className="mt-5 flex flex-wrap gap-x-6 gap-y-2">
+              {[...items.map((p) => p.name), 'The collection'].map((label, i) => {
+                const on = i === step;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => scrollToStep(i)}
+                    aria-current={on ? 'step' : undefined}
+                    className={`pb-1 text-sm transition-colors duration-300 border-b ${FOCUS_RING}`}
+                    style={{ color: on ? ABIX.ivory : ABIX.ivory45, borderColor: on ? ABIX.gold : 'transparent' }}
+                  >
+                    <span className="mr-2 font-grotesk text-[10px] tracking-luxe-sm" style={{ color: ABIX.gold }}>
+                      {pad(i + 1)}
+                    </span>
+                    {label}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────── Mobile, tablet and reduced motion: stacked ───────────── */
+
+function MobileItem({ item, index, total }) {
+  const text = textOf(item);
+  return (
+    <article id={`lc-item-${item.id}`} className="relative scroll-mt-24">
+      <div className="relative">
+        <div
+          aria-hidden="true"
+          className="absolute pointer-events-none"
+          style={{ right: '-3%', top: '-6%', height: '55%', width: '30%', color: FOREST.leaf, opacity: 0.45 }}
+        >
+          <Botanical variant={index} className="h-full w-full" />
+        </div>
+        <div
+          className="relative overflow-hidden"
+          style={{
+            aspectRatio: '1 / 1',
+            background: `linear-gradient(160deg, ${FOREST.moss} 0%, ${FOREST.deepest} 100%)`,
+            boxShadow: `inset 0 0 0 1px ${ABIX.ivory12}`,
+          }}
+        >
+          <ProductImage product={item} alt={item.name} />
+          <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(0deg, ${FOREST.deepest}CC 0%, transparent 50%)` }} />
+          <ConceptualTag className="absolute bottom-3 right-4" />
+        </div>
+      </div>
+
+      <div className="mt-5">
         <p className="font-grotesk text-xs tracking-luxe-sm" style={{ color: ABIX.ivory45 }}>
           {pad(index + 1)} / {pad(total)}
         </p>
-        <div className="mt-3"><StatusPill available={available} /></div>
-        <h3 className="mt-3 font-display text-4xl leading-[1.05] tracking-tight" style={{ color: ABIX.ivory }}>
+        <div className="mt-2"><StatusPill available={false} /></div>
+        <h3 className="mt-2 font-display text-4xl leading-[1.05] tracking-tight" style={{ color: ABIX.ivory }}>
           {item.name}
         </h3>
         {item.shortDesc && (
-          <p className="mt-3 font-display text-xl italic" style={{ color: ABIX.goldLight }}>{item.shortDesc}</p>
+          <p className="mt-2 font-display text-xl italic" style={{ color: ABIX.goldLight }}>{item.shortDesc}</p>
         )}
-        {text && (
-          <p className="mt-3 text-sm leading-relaxed" style={{ color: ABIX.ivory70 }}>{text}</p>
-        )}
+        {text && <p className="mt-3 text-sm leading-relaxed" style={{ color: ABIX.ivory70 }}>{text}</p>}
         <ItemActions item={item} />
       </div>
-    </motion.article>
+    </article>
   );
 }
 
-export default function ProductFamilyScroll() {
-  const { availableProducts, comingSoonProducts } = useCatalog();
-  const reduce = useReducedMotion();
-  const trackRef = useRef(null);
-  const [active, setActive] = useState(0);
-
-  const items = useMemo(
-    () => [...availableProducts, ...comingSoonProducts],
-    [availableProducts, comingSoonProducts]
-  );
-
-  const { scrollYProgress } = useScroll({ target: trackRef, offset: ['start start', 'end end'] });
-  const stageY = useTransform(scrollYProgress, [0, 1], reduce ? ['0%', '0%'] : ['3%', '-3%']);
-
-  useMotionValueEvent(scrollYProgress, 'change', (v) => {
-    if (items.length === 0) return;
-    const index = Math.min(items.length - 1, Math.max(0, Math.floor(v * items.length)));
-    setActive((previous) => (previous === index ? previous : index));
-  });
-
-  if (items.length === 0) return null;
-
-  const current = Math.min(active, items.length - 1);
-  const item = items[current];
-  const available = isAvailableProduct(item);
-  const text = textOf(item);
-
-  const scrollToItem = (i) => {
-    const el = trackRef.current;
-    if (!el) return;
-    const top = el.getBoundingClientRect().top + window.scrollY;
-    const travel = el.offsetHeight - window.innerHeight;
-    window.scrollTo({
-      top: top + ((i + 0.5) / items.length) * travel,
-      behavior: reduce ? 'auto' : 'smooth',
-    });
+function Stacked({ items, reduce }) {
+  const jump = (id) => {
+    const el = document.getElementById(`lc-item-${id}`);
+    if (el) el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
   };
 
   return (
-    <>
-      {/* Large screens: pinned stage that advances with scroll. */}
-      <div
-        ref={trackRef}
-        className="relative hidden lg:block"
-        style={{ height: `calc(${items.length} * 80vh + 20vh)` }}
-      >
-        <div className="sticky top-0 h-screen overflow-hidden">
-          <motion.div
-            aria-hidden="true"
-            className="absolute left-0 top-0 h-px w-full origin-left"
-            style={{ scaleX: scrollYProgress, background: ABIX.gold }}
-          />
+    <div className="mx-auto max-w-7xl px-6 sm:px-10" style={{ overflowX: 'clip' }}>
+      <nav aria-label="Collection chapters" className="-mx-6 px-6 sm:mx-0 sm:px-0 mb-8 flex gap-2 overflow-x-auto no-scrollbar pb-2">
+        {items.map((p, i) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => jump(p.id)}
+            className={`shrink-0 h-10 px-4 border text-xs ${FOCUS_RING}`}
+            style={{ borderColor: ABIX.ivory25, color: ABIX.ivory70 }}
+          >
+            <span className="mr-2 font-grotesk text-[10px]" style={{ color: ABIX.gold }}>{pad(i + 1)}</span>
+            {p.name}
+          </button>
+        ))}
+      </nav>
 
-          <div className="relative mx-auto h-full max-w-7xl px-10 grid grid-cols-12 gap-12 items-center">
-            <div className="col-span-5">
-              <p className="font-grotesk text-xs tracking-luxe-sm" style={{ color: ABIX.ivory45 }}>
-                {pad(current + 1)} / {pad(items.length)}
-              </p>
-
-              <div className="mt-6 min-h-[24rem]" aria-live="polite">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, y: reduce ? 0 : 24 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: reduce ? 0 : -16 }}
-                    transition={{ duration: reduce ? 0.1 : 0.5, ease: EASE }}
-                  >
-                    <StatusPill available={available} />
-                    <h3
-                      className="mt-5 font-display text-5xl xl:text-6xl leading-[1.02] tracking-tight"
-                      style={{ color: ABIX.ivory }}
-                    >
-                      {item.name}
-                    </h3>
-                    {item.shortDesc && (
-                      <p className="mt-4 font-display text-xl xl:text-2xl italic" style={{ color: ABIX.goldLight }}>
-                        {item.shortDesc}
-                      </p>
-                    )}
-                    {text && (
-                      <p
-                        className="mt-4 max-w-md text-base leading-relaxed"
-                        style={{
-                          color: ABIX.ivory70,
-                          display: '-webkit-box',
-                          WebkitLineClamp: 4,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        {text}
-                      </p>
-                    )}
-                    <ItemActions item={item} />
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-            </div>
-
-            <div className="col-span-7">
-              <motion.div style={{ y: stageY }} className="relative h-[64vh] w-full overflow-hidden">
-                {items.map((p, i) => (
-                  <StageImage key={p.id} product={p} active={i === current} reduce={reduce} />
-                ))}
-                <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(0deg, ${ABIX.obsidian}B3 0%, transparent 40%)` }} />
-                <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: `inset 0 0 0 1px ${ABIX.ivory12}` }} />
-                {['top-4 left-4 border-t border-l', 'top-4 right-4 border-t border-r', 'bottom-4 left-4 border-b border-l', 'bottom-4 right-4 border-b border-r'].map((pos) => (
-                  <span key={pos} className={`absolute ${pos} w-5 h-5 pointer-events-none`} style={{ borderColor: ABIX.gold25 }} />
-                ))}
-                {!available && (
-                  <span className="absolute bottom-6 right-7 text-[10px] tracking-wide" style={{ color: ABIX.ivory45 }}>
-                    Conceptual visual
-                  </span>
-                )}
-              </motion.div>
-
-              <nav aria-label="Product family" className="mt-5 flex flex-wrap gap-x-7 gap-y-2">
-                {items.map((p, i) => {
-                  const on = i === current;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => scrollToItem(i)}
-                      aria-current={on ? 'true' : undefined}
-                      className="pb-1 text-sm transition-colors duration-300 border-b"
-                      style={{
-                        color: on ? ABIX.ivory : ABIX.ivory45,
-                        borderColor: on ? ABIX.gold : 'transparent',
-                      }}
-                    >
-                      {p.name}
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Small screens: stacked, reveal on scroll. */}
-      <div className="lg:hidden mx-auto max-w-7xl px-6 space-y-16">
+      <div className="grid gap-14 md:grid-cols-2 md:gap-x-10">
         {items.map((p, i) => (
           <MobileItem key={p.id} item={p} index={i} total={items.length} />
         ))}
       </div>
-    </>
+
+      <div className="mt-16">
+        <p className="font-grotesk text-[11px] uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>The whole collection</p>
+        <h3 className="mt-3 font-display text-4xl leading-[1.05] tracking-tight" style={{ color: ABIX.ivory }}>
+          One family, growing together.
+        </h3>
+        <p className="mt-3 text-sm leading-relaxed" style={{ color: ABIX.ivory70 }}>
+          {items.length} product{items.length === 1 ? ' is' : 's are'} still in development.
+        </p>
+        <Link
+          to="/shop"
+          className={`mt-8 inline-flex items-center justify-center h-12 px-8 text-[11px] font-semibold tracking-luxe-sm uppercase ${FOCUS_RING}`}
+          style={{ background: ABIX.gold, color: FOREST.deepest }}
+        >
+          Explore the collection
+          <span className="ml-3" aria-hidden="true">→</span>
+        </Link>
+      </div>
+    </div>
   );
+}
+
+/* ─────────────────────────────── Entry point ─────────────────────────────── */
+
+export default function ProductFamilyScroll() {
+  const { comingSoonProducts } = useCatalog();
+  const reduce = useReducedMotion();
+  const isDesktop = useIsDesktop();
+
+  // Upcoming products only, in the requested order (Shilajit is featured
+  // elsewhere on the homepage). Anything not in ORDER follows, by catalog order.
+  const items = useMemo(
+    () => [...comingSoonProducts].sort((a, b) => orderOf(a) - orderOf(b)),
+    [comingSoonProducts]
+  );
+
+  if (items.length === 0) return null;
+
+  return isDesktop && !reduce ? <Pinned items={items} /> : <Stacked items={items} reduce={Boolean(reduce)} />;
 }

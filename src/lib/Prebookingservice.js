@@ -82,10 +82,29 @@ export async function submitPreBooking({ product, user, values, guestRef }) {
       throw Object.assign(new Error('Already registered'), { code: 'abixmart/already-registered' });
     }
 
-    await setDoc(doc(db, PRE_BOOKINGS_COLLECTION, preBookingDocId(user.uid, product.id)), {
-      ...body,
-      uid: user.uid,
-    });
+    try {
+      await setDoc(doc(db, PRE_BOOKINGS_COLLECTION, preBookingDocId(user.uid, product.id)), {
+        ...body,
+        uid: user.uid,
+      });
+    } catch (err) {
+      // A denied write can also mean the request already exists (a second
+      // write to the same id is an update, which customers cannot do), for
+      // example when two tabs submit at once. Check before blaming anything
+      // else, so the customer sees the right screen.
+      if (err?.code === 'permission-denied') {
+        let exists = false;
+        try {
+          exists = await hasMyPreBooking(user.uid, product.id);
+        } catch {
+          // Ignore: fall through to the original error.
+        }
+        if (exists) {
+          throw Object.assign(new Error('Already registered'), { code: 'abixmart/already-registered' });
+        }
+      }
+      throw err;
+    }
   } else {
     await setDoc(guestRef || createGuestBookingRef(), body);
   }
@@ -93,12 +112,20 @@ export async function submitPreBooking({ product, user, values, guestRef }) {
   rememberLocally(product.id);
 }
 
+// Customer-facing wording only: no document ids, field names or rule text.
+// The technical detail stays in the browser console (see PreOrderDialog).
 export function describePreBookingError(err) {
-  if (err?.code === 'permission-denied') {
-    return 'We could not save your request. This product may not be open for pre-orders right now, or you may already be registered. Please refresh the page and try again.';
+  switch (err?.code) {
+    case 'permission-denied':
+      return 'We could not save your request. Pre-orders for this product may have just closed, or there is a problem on our side. Your details are fine. Please try again later, or contact Support.';
+    case 'unavailable':
+    case 'deadline-exceeded':
+      return 'You seem to be offline. Please check your connection and try again.';
+    case 'resource-exhausted':
+      return 'We are receiving a lot of requests right now. Please wait a moment and try again.';
+    case 'abixmart/invalid':
+      return 'Some of your details need a second look. Please check the form and try again.';
+    default:
+      return 'Something went wrong while saving your request. Please try again.';
   }
-  if (err?.code === 'unavailable' || err?.code === 'deadline-exceeded') {
-    return 'You seem to be offline. Please check your connection and try again.';
-  }
-  return 'Something went wrong while saving your request. Please try again.';
 }

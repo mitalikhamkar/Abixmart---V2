@@ -224,7 +224,7 @@ export const faqs = [
   { q: "How should I store it?", a: "Store in a cool, dry place away from direct sunlight. Keep the lid sealed between uses." },
   { q: "What about shipping?", a: "We ship across India. Orders are typically dispatched within 1–2 business days. Delivery times vary by location." },
   { q: "What is your returns policy?", a: "If you receive a damaged or incorrect item, contact us within 48 hours and we will make it right. For hygiene reasons, opened product jars cannot be returned." },
-  { q: "What payment methods do you accept?", a: "The simplified checkout on this site is a prototype. When the full store launches, we will support standard payment methods including cards, UPI, and wallets." },
+    { q: "What payment methods do you accept?", a: "For now, we accept Cash on Delivery only. You pay in cash when your order arrives. Online payment options may be added in the future." },
   { q: "How do I know the product is authentic?", a: "Every jar is sealed and passes through our ten-stage process, including a final check before it ships. We focus on transparency rather than claims." },
   { q: "Is Shilajit safe for everyone?", a: "Shilajit is a traditional supplement, not a medicine. If you are pregnant, nursing, on medication, or managing a health condition, please consult a qualified healthcare professional before use." },
 ];

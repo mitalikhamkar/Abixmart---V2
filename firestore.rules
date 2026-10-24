@@ -373,5 +373,98 @@ service cloud.firestore {
         && request.resource.data.moderatedAt == request.time;
       allow delete: if isAdmin();
     }
+        // ─────────────────────────────────────────────
+    // PRE-ORDER INTEREST REQUESTS  (expression of interest only)
+    // ─────────────────────────────────────────────
+    //
+    //   Signed-in customer: preBookings/{uid}_{productId}, with a uid field.
+    //     The id allows one request per customer per product, and the
+    //     customer can read it back ("already registered").
+    //   Guest: auto id (20 letters/digits), no uid field. Guests can create
+    //     but never read, list or change anything.
+    //
+    // A request can only be created while the product exists and is
+    // 'coming_soon', and productName must match the product document.
+    // Customers can never update or delete. Admins can read, list, change
+    // only the status, and delete (to honour removal requests).
+    //
+    // Keep the allowed values below in sync with src/lib/preBookingConfig.js.
+
+    match /preBookings/{bookingId} {
+
+      // Used ONLY for a document that does not exist yet, so a customer's
+      // "already registered?" check returns "not found" instead of an
+      // error. Existing documents are always checked against their stored
+      // uid field.
+      function callerPrefixMatches() {
+        return request.auth.uid.matches('[A-Za-z0-9_-]+')
+          && bookingId.matches(request.auth.uid + '_.+');
+      }
+
+      function sharedFieldsValid() {
+        let d = request.resource.data;
+        return d.productId is string
+          && d.productName is string
+          && d.fullName is string
+          && d.fullName.size() >= 2
+          && d.fullName.size() <= 80
+          && d.phone is string
+          && d.phone.matches('\\+?[0-9]{7,15}')
+          && d.quantity is int
+          && d.quantity >= 1
+          && d.quantity <= 20
+          && d.timing in ['as-soon-as-available', 'within-1-month', 'within-3-months', 'just-exploring']
+          && d.consent == true
+          && d.consentVersion is string
+          && d.consentVersion.size() >= 1
+          && d.consentVersion.size() <= 20
+          && d.status == 'new'
+          && d.createdAt == request.time
+          && exists(/databases/$(database)/documents/products/$(d.productId))
+          && get(/databases/$(database)/documents/products/$(d.productId)).data.status == 'coming_soon'
+          && get(/databases/$(database)/documents/products/$(d.productId)).data.name == d.productName;
+      }
+
+      allow create: if sharedFieldsValid()
+        && (
+          // Signed-in customer.
+          (isSignedIn()
+            && bookingId == request.auth.uid + '_' + request.resource.data.productId
+            && request.resource.data.keys().hasOnly(
+                 ['uid', 'productId', 'productName', 'fullName', 'phone', 'quantity',
+                  'timing', 'consent', 'consentVersion', 'status', 'createdAt'])
+            && request.resource.data.keys().hasAll(
+                 ['uid', 'productId', 'productName', 'fullName', 'phone', 'quantity',
+                  'timing', 'consent', 'consentVersion', 'status', 'createdAt'])
+            && request.resource.data.uid == request.auth.uid)
+          ||
+          // Guest.
+          (request.auth == null
+            && bookingId.matches('[A-Za-z0-9]{20}')
+            && request.resource.data.keys().hasOnly(
+                 ['productId', 'productName', 'fullName', 'phone', 'quantity',
+                  'timing', 'consent', 'consentVersion', 'status', 'createdAt'])
+            && request.resource.data.keys().hasAll(
+                 ['productId', 'productName', 'fullName', 'phone', 'quantity',
+                  'timing', 'consent', 'consentVersion', 'status', 'createdAt']))
+        );
+
+      allow get: if isAdmin()
+        || (isSignedIn() && resource != null && resource.data.get('uid', null) == request.auth.uid)
+        || (isSignedIn() && resource == null && callerPrefixMatches());
+
+      allow list: if isAdmin();
+
+            // Admin may change only the follow-up status. If updatedAt is written
+      // in this update it must be the server time; a status-only update
+      // leaves any earlier updatedAt untouched.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.status in ['new', 'contacted', 'resolved']
+        && (!('updatedAt' in request.resource.data.diff(resource.data).affectedKeys())
+            || request.resource.data.updatedAt == request.time);
+
+      allow delete: if isAdmin();
+    }
   }
 }
