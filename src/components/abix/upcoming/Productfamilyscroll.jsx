@@ -9,11 +9,16 @@
 // once per frame and updates React only when the step changes.
 //
 // Mobile, tablet and reduced motion: a compact stacked list. Nothing starts
-// hidden, so content can never get stuck invisible.
+// hidden in the markup, so content can never get stuck invisible. CHANGED:
+// on mobile and tablet the stacked list now animates in as it is scrolled to
+// (image clip reveal + staggered fade-and-rise), applied from an effect so
+// that reduced motion or a failed animation still shows everything.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useReducedMotion } from 'framer-motion';
+import { useGSAP } from '@gsap/react';
+import { gsap } from '@/lib/gsap';
 import { useCatalog } from '@/lib/CatalogContext';
 import { ABIX } from '@/components/abix/brandColors';
 import Botanical from '@/components/abix/upcoming/livingCollection/Botanicals';
@@ -363,6 +368,8 @@ function Pinned({ items }) {
 
 /* ───────────────── Mobile, tablet and reduced motion: stacked ───────────── */
 
+// data-m-image = image box (clip reveal), data-reveal = fade-and-rise.
+// Both are only acted on by the effect in <Stacked>.
 function MobileItem({ item, index, total }) {
   const text = textOf(item);
   return (
@@ -376,6 +383,7 @@ function MobileItem({ item, index, total }) {
           <Botanical variant={index} className="h-full w-full" />
         </div>
         <div
+          data-m-image
           className="relative overflow-hidden"
           style={{
             aspectRatio: '1 / 1',
@@ -390,38 +398,73 @@ function MobileItem({ item, index, total }) {
       </div>
 
       <div className="mt-5">
-        <p className="font-grotesk text-xs tracking-luxe-sm" style={{ color: ABIX.ivory45 }}>
+        <p data-reveal className="font-grotesk text-xs tracking-luxe-sm" style={{ color: ABIX.ivory45 }}>
           {pad(index + 1)} / {pad(total)}
         </p>
-        <div className="mt-2"><StatusPill available={false} /></div>
-        <h3 className="mt-2 font-display text-4xl leading-[1.05] tracking-tight" style={{ color: ABIX.ivory }}>
+        <div data-reveal className="mt-2"><StatusPill available={false} /></div>
+        <h3 data-reveal className="mt-2 font-display text-4xl leading-[1.05] tracking-tight" style={{ color: ABIX.ivory }}>
           {item.name}
         </h3>
         {item.shortDesc && (
-          <p className="mt-2 font-display text-xl italic" style={{ color: ABIX.goldLight }}>{item.shortDesc}</p>
+          <p data-reveal className="mt-2 font-display text-xl italic" style={{ color: ABIX.goldLight }}>{item.shortDesc}</p>
         )}
-        {text && <p className="mt-3 text-sm leading-relaxed" style={{ color: ABIX.ivory70 }}>{text}</p>}
-        <ItemActions item={item} />
+        {text && <p data-reveal className="mt-3 text-sm leading-relaxed" style={{ color: ABIX.ivory70 }}>{text}</p>}
+        <div data-reveal><ItemActions item={item} /></div>
       </div>
     </article>
   );
 }
 
 function Stacked({ items, reduce }) {
+  const rootRef = useRef(null);
+
   const jump = (id) => {
     const el = document.getElementById(`lc-item-${id}`);
     if (el) el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
   };
 
+  // Scroll reveals for phones and tablets. Skipped for reduced motion.
+  useGSAP(
+    (context) => {
+      if (reduce) return;
+      gsap.utils.toArray(context.selector('[data-m-image]')).forEach((el) => {
+        gsap.fromTo(
+          el,
+          { clipPath: 'inset(100% 0% 0% 0%)' },
+          {
+            clipPath: 'inset(0% 0% 0% 0%)',
+            duration: 1.1,
+            ease: 'power3.inOut',
+            scrollTrigger: { trigger: el, start: 'top 88%', once: true },
+          }
+        );
+      });
+      context.selector('[data-reveal]').forEach((el) => {
+        gsap.fromTo(
+          el,
+          { autoAlpha: 0, y: 24 },
+          {
+            autoAlpha: 1,
+            y: 0,
+            duration: 0.8,
+            ease: 'power3.out',
+            scrollTrigger: { trigger: el, start: 'top 92%', once: true },
+          }
+        );
+      });
+    },
+    { scope: rootRef, dependencies: [reduce, items.length], revertOnUpdate: true }
+  );
+
   return (
-    <div className="mx-auto max-w-7xl px-6 sm:px-10" style={{ overflowX: 'clip' }}>
-      <nav aria-label="Collection chapters" className="-mx-6 px-6 sm:mx-0 sm:px-0 mb-8 flex gap-2 overflow-x-auto no-scrollbar pb-2">
+    <div ref={rootRef} className="mx-auto max-w-7xl px-6 sm:px-10" style={{ overflowX: 'clip' }}>
+      <nav aria-label="Collection chapters" data-reveal className="-mx-6 px-6 sm:mx-0 sm:px-0 mb-8 flex gap-2 overflow-x-auto no-scrollbar pb-2">
         {items.map((p, i) => (
           <button
             key={p.id}
             type="button"
             onClick={() => jump(p.id)}
-            className={`shrink-0 h-10 px-4 border text-xs ${FOCUS_RING}`}
+            className={`shrink-0 h-11 px-4 border text-xs ${FOCUS_RING}`}
             style={{ borderColor: ABIX.ivory25, color: ABIX.ivory70 }}
           >
             <span className="mr-2 font-grotesk text-[10px]" style={{ color: ABIX.gold }}>{pad(i + 1)}</span>
@@ -437,21 +480,23 @@ function Stacked({ items, reduce }) {
       </div>
 
       <div className="mt-16">
-        <p className="font-grotesk text-[11px] uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>The whole collection</p>
-        <h3 className="mt-3 font-display text-4xl leading-[1.05] tracking-tight" style={{ color: ABIX.ivory }}>
+        <p data-reveal className="font-grotesk text-[11px] uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>The whole collection</p>
+        <h3 data-reveal className="mt-3 font-display text-4xl leading-[1.05] tracking-tight" style={{ color: ABIX.ivory }}>
           One family, growing together.
         </h3>
-        <p className="mt-3 text-sm leading-relaxed" style={{ color: ABIX.ivory70 }}>
+        <p data-reveal className="mt-3 text-sm leading-relaxed" style={{ color: ABIX.ivory70 }}>
           {items.length} product{items.length === 1 ? ' is' : 's are'} still in development.
         </p>
-        <Link
-          to="/shop"
-          className={`mt-8 inline-flex items-center justify-center h-12 px-8 text-[11px] font-semibold tracking-luxe-sm uppercase ${FOCUS_RING}`}
-          style={{ background: ABIX.gold, color: FOREST.deepest }}
-        >
-          Explore the collection
-          <span className="ml-3" aria-hidden="true">→</span>
-        </Link>
+        <div data-reveal>
+          <Link
+            to="/shop"
+            className={`mt-8 inline-flex items-center justify-center h-12 px-8 text-[11px] font-semibold tracking-luxe-sm uppercase ${FOCUS_RING}`}
+            style={{ background: ABIX.gold, color: FOREST.deepest }}
+          >
+            Explore the collection
+            <span className="ml-3" aria-hidden="true">→</span>
+          </Link>
+        </div>
       </div>
     </div>
   );

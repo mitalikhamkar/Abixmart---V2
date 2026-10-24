@@ -1,12 +1,28 @@
 // src/components/abix/ShilajitShowcase.jsx
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+//
+// Shilajit showcase: a self-playing sequence, NOT scroll-driven.
+//
+// 'wide' (desktop): plays once when the section comes into view.
+//   heading + arch open, jar rises to the centre → benefits pop up one by
+//   one around it → they leave, the jar glides left → pack options reveal.
+//
+// 'compact' (phones and tablets): the same story, built for a narrow screen.
+//   heading + arch open → benefits appear one by one in a fixed-height slot
+//   under the jar (ending on the product facts) → the pack options reveal
+//   one by one as they are scrolled to.
+//
+// 'static' (reduced motion): everything visible, no animation.
+//
+// Content is visible by default. Animation only hides things from inside the
+// effect, so a GSAP failure can never leave the section blank.
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import { useReducedMotion } from 'framer-motion';
 import { gsap, ScrollTrigger } from '@/lib/gsap';
 import { useCatalog } from '@/lib/CatalogContext';
 import { useShop } from '@/lib/ShopContext';
-import { featuredProduct } from '@/data/products';
+import { featuredProduct, productBenefits } from '@/data/products';
 import showcaseBg from '@/assets/home/productShowcase_bg.png';
 import jarImg from '@/assets/home/products/shilajit-jar-cutout.png';
 import LeafShadow from '@/components/abix/home/LeafShadow';
@@ -14,11 +30,11 @@ import { FOREST, FOCUS_RING, pad } from '@/components/abix/upcoming/livingCollec
 import { ABIX } from './brandColors';
 
 const DESKTOP_QUERY = '(min-width: 1024px)';
-const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
-const STEPS = ['Overview', 'Origin & craft', 'The ritual', 'Choose a pack'];
-const TRAVEL_VH = 300; // scroll distance the stage stays pinned
 const ARCH = '50% 50% 0 0 / 34% 34% 0 0';
 const SLUG = 'shilajit';
+const WIDE_GAP = 0.85; // seconds between benefit pop-ups (desktop)
+const COMPACT_GAP = 1.5; // seconds each benefit stays (mobile)
+const money = (n) => Number(n).toLocaleString('en-IN');
 
 function useIsDesktop() {
   const [matches, setMatches] = useState(
@@ -34,241 +50,37 @@ function useIsDesktop() {
   return matches;
 }
 
-/* Style helpers: only applied in the pinned layout (`on`). */
-const fade = (on, active, i = 0) =>
-  on
-    ? {
-        opacity: active ? 1 : 0,
-        transform: active ? 'translate3d(0,0,0)' : 'translate3d(0,14px,0)',
-        transition: `opacity 0.6s ease ${active ? 0.1 + i * 0.07 : 0}s, transform 0.9s ${EASE} ${
-          active ? 0.1 + i * 0.07 : 0
-        }s`,
-      }
-    : undefined;
+/* ───────────────────────────── Pieces ───────────────────────────── */
 
-const layer = (on, active) =>
-  on
-    ? {
-        gridArea: '1 / 1',
-        visibility: active ? 'visible' : 'hidden',
-        transition: `visibility 0s linear ${active ? 0 : 0.8}s`,
-      }
-    : undefined;
-
-const flowAttr = (on) => (on ? {} : { 'data-reveal': '' });
-
-const money = (n) => Number(n).toLocaleString('en-IN');
-
-/* ───────────────────────────── Chapters ───────────────────────────── */
-
-function Overview({ on, active }) {
+function Heading() {
   return (
-    <div style={layer(on, active)} {...flowAttr(on)}>
+    <div className="text-center">
       <p
+        data-head
         className="inline-flex items-center gap-2 font-grotesk text-[11px] uppercase tracking-luxe-sm"
-        style={{ color: ABIX.gold, ...fade(on, active, 0) }}
+        style={{ color: ABIX.gold }}
       >
         <span className="h-1.5 w-1.5 rounded-full" style={{ background: ABIX.gold }} />
         Available now
       </p>
       <h2
+        data-head
         id="shilajit-title"
-        className="mt-5 font-display text-4xl sm:text-5xl xl:text-6xl leading-[1.02] tracking-tight"
-        style={{ color: ABIX.ivory, ...fade(on, active, 1) }}
+        className="mt-4 font-display text-4xl sm:text-5xl xl:text-6xl leading-[1.05] tracking-tight"
+        style={{ color: ABIX.ivory }}
       >
-        ABIXMART
-        <br />
-        Himalayan Shilajit
+        ABIXMART Himalayan Shilajit
       </h2>
-      <p
-        className="mt-4 font-display text-xl xl:text-2xl italic"
-        style={{ color: ABIX.goldLight, ...fade(on, active, 2) }}
-      >
+      <p data-head className="mt-3 font-display text-xl xl:text-2xl italic" style={{ color: ABIX.goldLight }}>
         {featuredProduct.tagline}
       </p>
-      <p
-        className="mt-4 max-w-md text-base leading-relaxed"
-        style={{ color: ABIX.ivory70, ...fade(on, active, 3) }}
-      >
-        {featuredProduct.description}
-      </p>
     </div>
   );
 }
 
-function Facts({ on, active }) {
+function Visual({ r, className = '', style }) {
   return (
-    <div style={layer(on, active)} {...flowAttr(on)}>
-      <p
-        className="font-grotesk text-[11px] uppercase tracking-luxe-sm"
-        style={{ color: ABIX.gold, ...fade(on, active, 0) }}
-      >
-        Origin &amp; craft
-      </p>
-      <h3
-        className="mt-4 font-display text-3xl sm:text-4xl xl:text-5xl leading-[1.05] tracking-tight"
-        style={{ color: ABIX.ivory, ...fade(on, active, 1) }}
-      >
-        Formed over centuries.
-        <br />
-        Purified with care.
-      </h3>
-      <dl className="mt-8 grid grid-cols-2 gap-x-8 gap-y-6 max-w-md">
-        {featuredProduct.facts.map((f, i) => (
-          <div
-            key={f.label}
-            className="border-t pt-3"
-            style={{ borderColor: ABIX.ivory12, ...fade(on, active, 2 + i) }}
-          >
-            <dt className="label-meta" style={{ color: ABIX.gold }}>{f.label}</dt>
-            <dd className="mt-1 font-display text-xl" style={{ color: ABIX.ivory }}>{f.value}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
-
-function Ritual({ on, active }) {
-  return (
-    <div style={layer(on, active)} {...flowAttr(on)}>
-      <p
-        className="font-grotesk text-[11px] uppercase tracking-luxe-sm"
-        style={{ color: ABIX.gold, ...fade(on, active, 0) }}
-      >
-        The ritual
-      </p>
-      <h3
-        className="mt-4 font-display text-3xl sm:text-4xl xl:text-5xl leading-[1.05] tracking-tight"
-        style={{ color: ABIX.ivory, ...fade(on, active, 1) }}
-      >
-        Once a day. Unhurried.
-      </h3>
-      <ol className="mt-7 max-w-md space-y-4">
-        {featuredProduct.howToUse.map((line, i) => (
-          <li key={line} className="flex gap-4" style={fade(on, active, 2 + i)}>
-            <span className="font-grotesk text-xs pt-1" style={{ color: ABIX.gold }}>{pad(i + 1)}</span>
-            <span className="text-base leading-relaxed" style={{ color: ABIX.ivory70 }}>{line}</span>
-          </li>
-        ))}
-      </ol>
-      <div style={fade(on, active, 5)}>
-        <Link
-          to="/how-to-take-shilajit"
-          className={`mt-7 inline-block text-[11px] font-semibold uppercase tracking-luxe-sm underline-offset-4 hover:underline ${FOCUS_RING}`}
-          style={{ color: ABIX.goldLight }}
-        >
-          How to take Shilajit →
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-function PackPanel({
-  on, active, product, variants, activeId, setSelectedId, loading, onAdd, status,
-}) {
-  const currency = product?.currency || featuredProduct.currency;
-  const chosen = variants.find((v) => v.id === activeId);
-  const price = chosen ? chosen.price : product?.price ?? featuredProduct.price;
-  const canBuy = Boolean(product) && !loading && product.status === 'available';
-
-  return (
-    <div style={layer(on, active)} {...flowAttr(on)}>
-      <p
-        className="font-grotesk text-[11px] uppercase tracking-luxe-sm"
-        style={{ color: ABIX.gold, ...fade(on, active, 0) }}
-      >
-        Choose a pack
-      </p>
-      <p
-        className="mt-4 font-price text-5xl leading-none"
-        style={{ color: ABIX.ivory, ...fade(on, active, 1) }}
-      >
-        {currency}{money(price)}
-      </p>
-
-      {variants.length > 0 && (
-        <div
-          role="radiogroup"
-          aria-label="Pack size"
-          className="mt-6 grid grid-cols-3 gap-3 max-w-lg"
-          style={fade(on, active, 2)}
-        >
-          {variants.map((v) => {
-            const sel = v.id === activeId;
-            return (
-              <button
-                key={v.id}
-                type="button"
-                role="radio"
-                aria-checked={sel}
-                onClick={() => setSelectedId(v.id)}
-                className={`text-left border px-3 py-3 transition-colors duration-300 ${FOCUS_RING}`}
-                style={{
-                  borderColor: sel ? ABIX.gold : ABIX.ivory25,
-                  background: sel ? ABIX.gold15 : 'transparent',
-                }}
-              >
-                <span
-                  className="block text-[10px] font-semibold uppercase tracking-luxe-sm"
-                  style={{ color: sel ? ABIX.ivory : ABIX.ivory70 }}
-                >
-                  {v.name}
-                </span>
-                <span className="mt-1 block font-price text-base" style={{ color: ABIX.ivory }}>
-                  {currency}{money(v.price)}
-                </span>
-                {v.originalPrice > v.price && (
-                  <span className="block text-xs line-through" style={{ color: ABIX.ivory45 }}>
-                    {currency}{money(v.originalPrice)}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3" style={fade(on, active, 3)}>
-        <button
-          type="button"
-          onClick={onAdd}
-          disabled={!canBuy}
-          className={`inline-flex items-center justify-center h-12 lg:h-14 px-8 text-[11px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300 disabled:opacity-40 disabled:pointer-events-none hover:brightness-110 ${FOCUS_RING}`}
-          style={{ background: ABIX.ivory, color: FOREST.deepest }}
-        >
-          {loading ? 'Loading…' : 'Add to cart'}
-        </button>
-        <Link
-          to={`/shop/${product?.slug || SLUG}`}
-          className={`text-[11px] font-semibold uppercase tracking-luxe-sm underline-offset-4 hover:underline ${FOCUS_RING}`}
-          style={{ color: ABIX.goldLight }}
-        >
-          View full details →
-        </Link>
-      </div>
-
-      <p className="mt-4 min-h-[1.25rem] text-sm" role="status" aria-live="polite" style={{ color: ABIX.ivory70 }}>
-        {status === 'added' && (
-          <>
-            Added to your cart.{' '}
-            <Link to="/cart" className="underline underline-offset-4" style={{ color: ABIX.goldLight }}>
-              View cart
-            </Link>
-          </>
-        )}
-        {status === 'failed' && "That pack can't be added right now."}
-      </p>
-    </div>
-  );
-}
-
-/* ───────────────────────────── Visual ───────────────────────────── */
-
-function Visual({ r, className }) {
-  return (
-    <div className={`relative ${className}`}>
+    <div ref={r.arch} className={`relative ${className}`} style={style}>
       <div
         ref={r.frame}
         aria-hidden="true"
@@ -282,7 +94,6 @@ function Visual({ r, className }) {
           style={{ background: `linear-gradient(165deg, ${FOREST.moss} 0%, ${FOREST.deepest} 100%)` }}
         >
           <img
-            ref={r.bg}
             src={showcaseBg}
             alt=""
             aria-hidden="true"
@@ -314,23 +125,186 @@ function Visual({ r, className }) {
   );
 }
 
+// Desktop: placed around the centred jar.
+function Benefit({ item, index, side }) {
+  const right = side === 'r';
+  return (
+    <div
+      data-benefit
+      data-i={index}
+      data-side={side}
+      className={`max-w-[260px] ${right ? 'text-left' : 'ml-auto text-right'}`}
+    >
+      <span className="font-grotesk text-[10px] tracking-luxe-sm" style={{ color: ABIX.gold }}>
+        {pad(index + 1)}
+      </span>
+      <h3 className="mt-1 font-display text-2xl leading-tight" style={{ color: ABIX.ivory }}>
+        {item.title}
+      </h3>
+      <p className="mt-1.5 text-sm leading-relaxed" style={{ color: ABIX.ivory70 }}>
+        {item.body}
+      </p>
+    </div>
+  );
+}
+
+// Mobile / tablet: one at a time, in the slot under the jar.
+function BenefitCompact({ item, index, total }) {
+  return (
+    <div data-benefit data-i={index} className="text-center max-w-sm mx-auto">
+      <span className="font-grotesk text-[10px] tracking-luxe-sm" style={{ color: ABIX.gold }}>
+        {pad(index + 1)} / {pad(total)}
+      </span>
+      <h3 className="mt-1.5 font-display text-3xl leading-tight" style={{ color: ABIX.ivory }}>
+        {item.title}
+      </h3>
+      <p className="mt-2 text-sm leading-relaxed" style={{ color: ABIX.ivory70 }}>
+        {item.body}
+      </p>
+    </div>
+  );
+}
+
+function FactsFinal() {
+  const picks = featuredProduct.facts.filter((f) => ['Origin', 'Form', 'Net Weight'].includes(f.label));
+  return (
+    <div data-final data-i={99} className="text-center max-w-sm mx-auto">
+      <span className="font-grotesk text-[10px] tracking-luxe-sm" style={{ color: ABIX.gold }}>
+        In every jar
+      </span>
+      <p className="mt-2 font-display text-2xl leading-snug" style={{ color: ABIX.ivory }}>
+        {picks.map((f) => f.value).join(' · ')}
+      </p>
+    </div>
+  );
+}
+
+function PackPanel({ product, variants, activeId, setSelectedId, loading, onAdd, status }) {
+  const currency = product?.currency || featuredProduct.currency;
+  const chosen = variants.find((v) => v.id === activeId);
+  const price = chosen ? chosen.price : product?.price ?? featuredProduct.price;
+  const saving = chosen && chosen.originalPrice > chosen.price ? chosen.originalPrice - chosen.price : 0;
+  const canBuy = Boolean(product) && !loading && product.status === 'available';
+
+  return (
+    <div>
+      <p data-panel-part className="font-grotesk text-[11px] uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>
+        Choose your pack
+      </p>
+      <div data-panel-part className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="font-price text-5xl leading-none" style={{ color: ABIX.ivory }}>
+          {currency}{money(price)}
+        </span>
+        {saving > 0 && (
+          <span className="text-sm" style={{ color: ABIX.goldLight }}>
+            You save {currency}{money(saving)}
+          </span>
+        )}
+      </div>
+
+      {variants.length > 0 && (
+        <div role="radiogroup" aria-label="Pack size" className="mt-6 grid grid-cols-3 gap-2 sm:gap-3 max-w-xl">
+          {variants.map((v) => {
+            const sel = v.id === activeId;
+            return (
+              <button
+                key={v.id}
+                data-panel-part
+                type="button"
+                role="radio"
+                aria-checked={sel}
+                onClick={() => setSelectedId(v.id)}
+                className={`text-left border px-2.5 sm:px-3 py-4 transition-colors duration-300 ${FOCUS_RING}`}
+                style={{
+                  borderColor: sel ? ABIX.gold : ABIX.ivory25,
+                  background: sel ? ABIX.gold15 : 'transparent',
+                }}
+              >
+                <span
+                  className="block text-[10px] font-semibold uppercase tracking-luxe-sm break-words"
+                  style={{ color: sel ? ABIX.ivory : ABIX.ivory70 }}
+                >
+                  {v.name}
+                </span>
+                {v.jars > 0 && (
+                  <span className="mt-1 block text-xs" style={{ color: ABIX.ivory45 }}>
+                    {v.jars} {v.jars === 1 ? 'jar' : 'jars'}
+                  </span>
+                )}
+                <span className="mt-2 block font-price text-base sm:text-lg" style={{ color: ABIX.ivory }}>
+                  {currency}{money(v.price)}
+                </span>
+                {v.originalPrice > v.price && (
+                  <span className="block text-xs line-through" style={{ color: ABIX.ivory45 }}>
+                    {currency}{money(v.originalPrice)}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div data-panel-part className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3">
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={!canBuy}
+          className={`inline-flex items-center justify-center h-12 lg:h-14 px-8 text-[11px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300 disabled:opacity-40 disabled:pointer-events-none hover:brightness-110 ${FOCUS_RING}`}
+          style={{ background: ABIX.ivory, color: FOREST.deepest }}
+        >
+          {loading ? 'Loading…' : 'Add to cart'}
+        </button>
+        <Link
+          to={`/shop/${product?.slug || SLUG}`}
+          className={`inline-flex items-center min-h-[44px] text-[11px] font-semibold uppercase tracking-luxe-sm underline-offset-4 hover:underline ${FOCUS_RING}`}
+          style={{ color: ABIX.goldLight }}
+        >
+          View full details →
+        </Link>
+      </div>
+
+      <p
+        data-panel-part
+        className="mt-4 min-h-[1.25rem] text-sm"
+        role="status"
+        aria-live="polite"
+        style={{ color: ABIX.ivory70 }}
+      >
+        {status === 'added' && (
+          <>
+            Added to your cart.{' '}
+            <Link to="/cart" className="underline underline-offset-4" style={{ color: ABIX.goldLight }}>
+              View cart
+            </Link>
+          </>
+        )}
+        {status === 'failed' && "That pack can't be added right now."}
+      </p>
+    </div>
+  );
+}
+
 /* ───────────────────────────── Section ───────────────────────────── */
 
 export default function ShilajitShowcase() {
   const reduce = useReducedMotion();
   const isDesktop = useIsDesktop();
-  const pinned = isDesktop && !reduce;
+  const mode = reduce ? 'static' : isDesktop ? 'wide' : 'compact';
 
   const rootRef = useRef(null);
-  const trackRef = useRef(null);
-  const barRef = useRef(null);
+  const stageRef = useRef(null);
+  const panelRef = useRef(null);
+  const benefitsRef = useRef(null);
+  const slotRef = useRef(null);
+  const skipRef = useRef(null);
+  const tlRef = useRef(null);
+  const archRef = useRef(null);
   const frameRef = useRef(null);
   const innerRef = useRef(null);
-  const bgRef = useRef(null);
   const jarRef = useRef(null);
   const timerRef = useRef(null);
 
-  const [step, setStep] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   const [status, setStatus] = useState('idle');
 
@@ -353,101 +327,140 @@ export default function ShilajitShowcase() {
 
   useGSAP(
     (context) => {
-      if (reduce) return;
-      const v = { frame: frameRef.current, inner: innerRef.current, bg: bgRef.current, jar: jarRef.current };
-      if (!v.inner) return;
-
+      if (mode === 'static') return;
       if (document.fonts?.ready) document.fonts.ready.then(() => ScrollTrigger.refresh());
 
-      if (pinned) {
-        const track = trackRef.current;
-        if (!track) return;
+      const head = context.selector('[data-head]');
+      const panelParts = context.selector('[data-panel-part]');
+      const inner = innerRef.current;
+      if (!inner) return;
 
-        // Entrance: arched window opens as the section arrives.
-        gsap.fromTo(
-          v.inner,
-          { clipPath: 'inset(100% 0% 0% 0%)' },
-          {
-            clipPath: 'inset(0% 0% 0% 0%)',
-            duration: 1.3,
-            ease: 'power3.inOut',
-            scrollTrigger: { trigger: track, start: 'top 72%', once: true },
-          }
-        );
-        gsap.fromTo(
-          v.frame,
-          { opacity: 0, scale: 0.96 },
-          {
-            opacity: 1,
-            scale: 1,
-            duration: 1.2,
-            delay: 0.4,
-            ease: 'power2.out',
-            scrollTrigger: { trigger: track, start: 'top 72%', once: true },
-          }
-        );
+      /* ───── Desktop: self-playing sequence ───── */
+      if (mode === 'wide') {
+        const arch = archRef.current;
+        const stage = stageRef.current;
+        const panel = panelRef.current;
+        const layer = benefitsRef.current;
+        if (!arch || !stage || !panel || !layer) return;
 
-        // Scrubbed motion while pinned.
-        const range = { trigger: track, start: 'top top', end: 'bottom bottom', scrub: 0.6 };
-        gsap.fromTo(v.jar, { scale: 0.95, yPercent: 3 }, { scale: 1.06, yPercent: -3, ease: 'none', scrollTrigger: range });
-        gsap.fromTo(v.bg, { scale: 1.16 }, { scale: 1, ease: 'none', scrollTrigger: range });
-        if (barRef.current) {
-          gsap.fromTo(barRef.current, { scaleX: 0 }, { scaleX: 1, ease: 'none', scrollTrigger: range });
-        }
+        const benefits = gsap.utils
+          .toArray(context.selector('[data-benefit]'))
+          .sort((a, b) => Number(a.dataset.i) - Number(b.dataset.i));
 
-        // Chapter state (React) follows scroll progress.
+        // Where the arch ends up (left column) vs where it starts (stage centre).
+        gsap.set(arch, { x: 0 });
+        const sr = stage.getBoundingClientRect();
+        const ar = arch.getBoundingClientRect();
+        const offset = sr.left + sr.width / 2 - (ar.left + ar.width / 2);
+
+        gsap.set(arch, { x: offset });
+        gsap.set(inner, { clipPath: 'inset(100% 0% 0% 0%)' });
+        gsap.set(frameRef.current, { autoAlpha: 0, scale: 0.96 });
+        gsap.set(jarRef.current, { autoAlpha: 0, y: 36, scale: 0.94 });
+        gsap.set(head, { autoAlpha: 0, y: 24 });
+        gsap.set(panelParts, { autoAlpha: 0, y: 20 });
+        gsap.set(panel, { autoAlpha: 0 });
+        if (skipRef.current) gsap.set(skipRef.current, { autoAlpha: 0 });
+
+        const tl = gsap.timeline({ paused: true, defaults: { ease: 'power3.out' } });
+        tlRef.current = tl;
+
+        tl.to(head, { autoAlpha: 1, y: 0, duration: 0.8, stagger: 0.12 }, 0)
+          .to(inner, { clipPath: 'inset(0% 0% 0% 0%)', duration: 1.2, ease: 'power3.inOut' }, 0.2)
+          .to(frameRef.current, { autoAlpha: 1, scale: 1, duration: 1 }, 0.7)
+          .to(jarRef.current, { autoAlpha: 1, y: 0, scale: 1, duration: 1 }, 0.9);
+        if (skipRef.current) tl.to(skipRef.current, { autoAlpha: 1, duration: 0.4 }, 1.3);
+
+        const start = 2.1;
+        benefits.forEach((el, i) => {
+          const dir = el.dataset.side === 'r' ? 1 : -1;
+          tl.fromTo(
+            el,
+            { autoAlpha: 0, x: dir * -28, scale: 0.92 },
+            { autoAlpha: 1, x: 0, scale: 1, duration: 0.6, ease: 'back.out(1.5)' },
+            start + i * WIDE_GAP
+          );
+        });
+        tl.to(jarRef.current, { scale: 1.04, duration: benefits.length * WIDE_GAP, ease: 'sine.inOut' }, start);
+
+        const end = start + benefits.length * WIDE_GAP + 0.9;
+        tl.to(benefits, { autoAlpha: 0, y: -12, duration: 0.5, stagger: 0.05, ease: 'power2.in' }, end);
+        if (skipRef.current) tl.to(skipRef.current, { autoAlpha: 0, duration: 0.3 }, end);
+        tl.to(jarRef.current, { scale: 1, duration: 1.2, ease: 'power2.inOut' }, end + 0.2)
+          .to(arch, { x: 0, duration: 1.3, ease: 'power3.inOut' }, end + 0.35);
+
+        tl.set(panel, { autoAlpha: 1 }, end + 0.9)
+          .to(panelParts, { autoAlpha: 1, y: 0, duration: 0.7, stagger: 0.12 }, end + 0.9);
+
         ScrollTrigger.create({
-          trigger: track,
-          start: 'top top',
-          end: 'bottom bottom',
-          onUpdate: (self) => {
-            const next = Math.min(STEPS.length - 1, Math.floor(self.progress * STEPS.length));
-            setStep((prev) => (prev === next ? prev : next));
-          },
+          trigger: rootRef.current,
+          start: 'top 60%',
+          once: true,
+          onEnter: () => tl.play(),
         });
         return;
       }
 
-      // Natural-flow layout: one light reveal per block.
-      gsap.fromTo(
-        v.inner,
-        { clipPath: 'inset(100% 0% 0% 0%)' },
-        {
-          clipPath: 'inset(0% 0% 0% 0%)',
-          duration: 1.2,
-          ease: 'power3.inOut',
-          scrollTrigger: { trigger: v.inner, start: 'top 85%', once: true },
-        }
-      );
-      context.selector('[data-reveal]').forEach((el) => {
-        gsap.fromTo(
-          el,
-          { autoAlpha: 0, y: 28 },
-          {
-            autoAlpha: 1,
-            y: 0,
-            duration: 0.9,
-            ease: 'power3.out',
-            scrollTrigger: { trigger: el, start: 'top 88%', once: true },
-          }
-        );
+      /* ───── Phones & tablets: compact sequence ───── */
+      const slot = slotRef.current;
+      if (!slot) return;
+      const items = gsap.utils
+        .toArray(slot.children)
+        .sort((a, b) => Number(a.dataset.i) - Number(b.dataset.i));
+      const gap = COMPACT_GAP;
+
+      // All items share one cell, so the slot never changes height.
+      gsap.set(slot, { minHeight: '10.5rem', alignContent: 'center' });
+      gsap.set(items, { gridArea: '1 / 1', autoAlpha: 0, y: 16 });
+      gsap.set(inner, { clipPath: 'inset(100% 0% 0% 0%)' });
+      gsap.set(frameRef.current, { autoAlpha: 0, scale: 0.96 });
+      gsap.set(jarRef.current, { autoAlpha: 0, y: 30, scale: 0.94 });
+      gsap.set(head, { autoAlpha: 0, y: 22 });
+      if (skipRef.current) gsap.set(skipRef.current, { autoAlpha: 0 });
+
+      const tl = gsap.timeline({ paused: true, defaults: { ease: 'power3.out' } });
+      tlRef.current = tl;
+
+      tl.to(head, { autoAlpha: 1, y: 0, duration: 0.7, stagger: 0.1 }, 0)
+        .to(inner, { clipPath: 'inset(0% 0% 0% 0%)', duration: 1.1, ease: 'power3.inOut' }, 0.15)
+        .to(frameRef.current, { autoAlpha: 1, scale: 1, duration: 0.9 }, 0.6)
+        .to(jarRef.current, { autoAlpha: 1, y: 0, scale: 1, duration: 0.9 }, 0.8);
+      if (skipRef.current) tl.to(skipRef.current, { autoAlpha: 1, duration: 0.4 }, 1.2);
+
+      const first = 1.6;
+      items.forEach((el, i) => {
+        const at = first + i * gap;
+        const last = i === items.length - 1;
+        tl.to(el, { autoAlpha: 1, y: 0, duration: 0.6 }, at);
+        if (!last) tl.to(el, { autoAlpha: 0, y: -12, duration: 0.35, ease: 'power2.in' }, at + gap - 0.35);
+      });
+      if (skipRef.current) tl.to(skipRef.current, { autoAlpha: 0, duration: 0.3 }, first + (items.length - 1) * gap);
+
+      // Starts once the whole slot is on screen, so nothing plays off-screen.
+      ScrollTrigger.create({
+        trigger: slot,
+        start: 'bottom 92%',
+        once: true,
+        onEnter: () => tl.play(),
+      });
+
+      // Pack options: revealed one by one as they are scrolled to.
+      gsap.set(panelParts, { autoAlpha: 0, y: 22 });
+      ScrollTrigger.batch(panelParts, {
+        start: 'top 92%',
+        once: true,
+        onEnter: (batch) =>
+          gsap.to(batch, { autoAlpha: 1, y: 0, duration: 0.7, stagger: 0.1, ease: 'power3.out', overwrite: true }),
       });
     },
-    { scope: rootRef, dependencies: [pinned, reduce], revertOnUpdate: true }
+    { scope: rootRef, dependencies: [mode], revertOnUpdate: true }
   );
 
-  const scrollToStep = useCallback((i) => {
-    const el = trackRef.current;
-    if (!el) return;
-    const top = el.getBoundingClientRect().top + window.scrollY;
-    const travel = el.offsetHeight - window.innerHeight;
-    window.scrollTo({ top: top + ((i + 0.5) / STEPS.length) * travel, behavior: 'smooth' });
-  }, []);
-
-  const visualRefs = { frame: frameRef, inner: innerRef, bg: bgRef, jar: jarRef };
-  const pack = {
-    product, variants, activeId, setSelectedId, loading, onAdd: handleAdd, status,
-  };
+  const skip = () => tlRef.current?.progress(1);
+  const visualRefs = { arch: archRef, frame: frameRef, inner: innerRef, jar: jarRef };
+  const pack = { product, variants, activeId, setSelectedId, loading, onAdd: handleAdd, status };
+  const left = productBenefits.filter((_, i) => i % 2 === 0);
+  const right = productBenefits.filter((_, i) => i % 2 === 1);
 
   return (
     <section
@@ -459,60 +472,56 @@ export default function ShilajitShowcase() {
         background: `linear-gradient(180deg, ${ABIX.obsidian} 0%, ${FOREST.deep} 8%, ${FOREST.mid} 35%, ${FOREST.moss} 55%, ${FOREST.mid} 75%, ${FOREST.deepest} 100%)`,
       }}
     >
-      {/* dusk glow along the bottom edge, the one colour transition into pre-orders */}
+      {/* dusk glow along the bottom edge: the colour transition into pre-orders */}
       <div
         aria-hidden="true"
         className="absolute inset-x-0 bottom-0 h-[45vh] pointer-events-none"
         style={{ background: `radial-gradient(70% 100% at 50% 100%, ${ABIX.gold15} 0%, transparent 70%)` }}
       />
 
-      {pinned ? (
-        <div ref={trackRef} className="relative" style={{ height: `${TRAVEL_VH + 100}vh` }}>
-          <div className="sticky top-0 h-screen overflow-hidden">
-            <LeafShadow side="left" opacity={0.06} />
-            <div
-              ref={barRef}
-              aria-hidden="true"
-              className="absolute left-0 bottom-0 h-px w-full origin-left z-10"
-              style={{ transform: 'scaleX(0)', background: ABIX.gold }}
-            />
+      {mode === 'wide' ? (
+        <div className="relative">
+          <LeafShadow side="left" opacity={0.06} />
+          <div className="relative z-[1] mx-auto max-w-7xl px-10 pt-28 pb-14">
+            <Heading />
 
-            <div className="relative z-[1] mx-auto h-full max-w-7xl px-10 pt-24 pb-10 grid grid-cols-12 gap-12 items-center">
-              <div className="col-span-6 flex justify-center">
-                <Visual r={visualRefs} className="h-[64vh] min-h-[380px] aspect-[3/4]" />
+            <div
+              ref={stageRef}
+              className="relative mt-10 grid grid-cols-2 items-center gap-10"
+              style={{ minHeight: 'clamp(420px, 62vh, 600px)' }}
+            >
+              <div className="flex justify-center">
+                <Visual r={visualRefs} style={{ height: 'clamp(380px, 56vh, 540px)', aspectRatio: '3 / 4' }} />
               </div>
 
-              <div className="col-span-6">
-                <p className="font-grotesk text-xs tracking-luxe-sm" style={{ color: ABIX.ivory45 }}>
-                  {pad(step + 1)} / {pad(STEPS.length)}
-                </p>
-                <div className="mt-6 grid">
-                  <Overview on active={step === 0} />
-                  <Facts on active={step === 1} />
-                  <Ritual on active={step === 2} />
-                  <PackPanel on active={step === 3} {...pack} />
-                </div>
+              <div ref={panelRef}>
+                <PackPanel {...pack} />
+              </div>
 
-                <nav aria-label="Shilajit chapters" className="mt-8 flex flex-wrap gap-x-6 gap-y-2">
-                  {STEPS.map((label, i) => {
-                    const on = i === step;
-                    return (
-                      <button
-                        key={label}
-                        type="button"
-                        onClick={() => scrollToStep(i)}
-                        aria-current={on ? 'step' : undefined}
-                        className={`pb-1 text-sm transition-colors duration-300 border-b ${FOCUS_RING}`}
-                        style={{ color: on ? ABIX.ivory : ABIX.ivory45, borderColor: on ? ABIX.gold : 'transparent' }}
-                      >
-                        <span className="mr-2 font-grotesk text-[10px] tracking-luxe-sm" style={{ color: ABIX.gold }}>
-                          {pad(i + 1)}
-                        </span>
-                        {label}
-                      </button>
-                    );
-                  })}
-                </nav>
+              {/* benefits around the centred jar (decorative layer, never blocks clicks) */}
+              <div ref={benefitsRef} className="absolute inset-0 pointer-events-none">
+                <div className="absolute left-0 top-0 bottom-0 w-[30%] flex flex-col justify-around">
+                  {left.map((b, k) => (
+                    <Benefit key={b.key} item={b} index={k * 2} side="l" />
+                  ))}
+                </div>
+                <div className="absolute right-0 top-0 bottom-0 w-[30%] flex flex-col justify-around">
+                  {right.map((b, k) => (
+                    <Benefit key={b.key} item={b} index={k * 2 + 1} side="r" />
+                  ))}
+                </div>
+              </div>
+
+              <div className="absolute inset-x-0 -bottom-2 flex justify-center pointer-events-none">
+                <button
+                  ref={skipRef}
+                  type="button"
+                  onClick={skip}
+                  className={`pointer-events-auto px-3 py-1 text-[10px] uppercase tracking-luxe-sm underline-offset-4 hover:underline ${FOCUS_RING}`}
+                  style={{ color: ABIX.ivory45 }}
+                >
+                  Skip intro
+                </button>
               </div>
             </div>
           </div>
@@ -520,15 +529,37 @@ export default function ShilajitShowcase() {
       ) : (
         <div className="relative">
           <LeafShadow side="right" opacity={0.06} className="inset-x-0 top-0 h-[60vh]" />
-          <div className="relative z-[1] mx-auto max-w-xl md:max-w-2xl px-6 py-20 md:py-24">
-            <Overview on={false} />
-            <div className="mt-14">
-              <Visual r={visualRefs} className="mx-auto w-full max-w-[22rem] aspect-[3/4]" />
+          <div className="relative z-[1] mx-auto max-w-xl md:max-w-2xl px-6 pt-24 pb-20 md:pb-24">
+            <Heading />
+
+            <div className="mt-8 flex justify-center">
+              <Visual r={visualRefs} className="w-[13.5rem] sm:w-[16rem] aspect-[3/4]" />
             </div>
-            <div className="mt-16 space-y-16">
-              <Facts on={false} />
-              <Ritual on={false} />
-              <PackPanel on={false} {...pack} />
+
+            {/* Benefit slot. Without JS (or with reduced motion) this is a plain list. */}
+            <div ref={slotRef} className="mt-10 grid gap-8">
+              {productBenefits.map((b, i) => (
+                <BenefitCompact key={b.key} item={b} index={i} total={productBenefits.length} />
+              ))}
+              <FactsFinal />
+            </div>
+
+            {mode === 'compact' && (
+              <div className="mt-2 flex justify-center">
+                <button
+                  ref={skipRef}
+                  type="button"
+                  onClick={skip}
+                  className={`min-h-[44px] px-4 text-[10px] uppercase tracking-luxe-sm underline-offset-4 hover:underline ${FOCUS_RING}`}
+                  style={{ color: ABIX.ivory45 }}
+                >
+                  Skip intro
+                </button>
+              </div>
+            )}
+
+            <div className="mt-10">
+              <PackPanel {...pack} />
             </div>
           </div>
         </div>

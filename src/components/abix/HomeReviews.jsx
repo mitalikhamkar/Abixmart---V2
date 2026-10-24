@@ -1,5 +1,5 @@
 // src/components/abix/HomeReviews.jsx
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Quote } from 'lucide-react';
@@ -9,6 +9,7 @@ import { useCatalog } from '@/lib/CatalogContext';
 import { useApprovedReviews } from '@/lib/useReviews';
 import { useFeaturedReviews } from '@/lib/useFeaturedReviews';
 import { computeReviewStats, formatReviewDate } from '@/lib/reviewUtils';
+import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { ABIX } from './brandColors';
 
 // One spotlight plus up to four more in the rail.
@@ -27,8 +28,12 @@ const clamp = (lines) => ({
 // when its product resolves in the catalog, so each one can name and link
 // its product honestly. Featured reviews are preferred, and the selection
 // rotates once every 24 hours (see featuredReviews.js).
+//
+// CHANGED: heading, rating summary and the review block reveal on scroll
+// (data-reveal, driven by useScrollReveal) on every screen size.
 export default function HomeReviews() {
   const reduce = useReducedMotion();
+  const rootRef = useRef(null);
   const { reviews, loading, error } = useApprovedReviews(null);
   const { getProductById, loading: catalogLoading } = useCatalog();
   const [activeId, setActiveId] = useState(null);
@@ -49,6 +54,8 @@ export default function HomeReviews() {
   const selection = useFeaturedReviews(resolvedReviews, { limit: SELECTION_SIZE, scope: 'home' });
 
   const busy = loading || catalogLoading;
+  useScrollReveal(rootRef, { ready: !busy });
+
   const active = selection.find((r) => r.id === activeId) || selection[0] || null;
   const activeProduct = active ? productByReview.get(active.id) : null;
   const isEmpty = !busy && !error && selection.length === 0;
@@ -168,6 +175,7 @@ export default function HomeReviews() {
   return (
     <section
       id="reviews"
+      ref={rootRef}
       className={`relative overflow-hidden grain ${isEmpty ? 'py-14 lg:py-20' : 'py-20 lg:py-28'}`}
       style={{ background: ABIX.obsidian }}
     >
@@ -187,17 +195,24 @@ export default function HomeReviews() {
       <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10">
         <div className="mb-10 lg:mb-14 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8">
           <div className="max-w-xl">
-            <Eyebrow light>Reviews</Eyebrow>
-            <h2 className="mt-4 font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.05] tracking-tight" style={{ color: ABIX.ivory }}>
+            <div data-reveal>
+              <Eyebrow light>Reviews</Eyebrow>
+            </div>
+            <h2
+              data-reveal
+              data-reveal-delay="0.1"
+              className="mt-4 font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.05] tracking-tight"
+              style={{ color: ABIX.ivory }}
+            >
               Voices from the ritual.
             </h2>
-            <p className="mt-5 text-sm sm:text-base max-w-md" style={{ color: ABIX.ivory70 }}>
+            <p data-reveal data-reveal-delay="0.2" className="mt-5 text-sm sm:text-base max-w-md" style={{ color: ABIX.ivory70 }}>
               Honest words from people who bring ABIXMART into their day.
             </p>
           </div>
 
           {!busy && !error && stats.count > 0 && (
-            <div className="flex items-center gap-4">
+            <div data-reveal data-reveal-delay="0.2" className="flex items-center gap-4">
               <span className="font-display text-5xl leading-none" style={{ color: ABIX.ivory }}>
                 {stats.average.toFixed(1)}
               </span>
@@ -211,7 +226,9 @@ export default function HomeReviews() {
           )}
         </div>
 
-        {body}
+        <div data-reveal data-reveal-delay="0.15">
+          {body}
+        </div>
       </div>
     </section>
   );

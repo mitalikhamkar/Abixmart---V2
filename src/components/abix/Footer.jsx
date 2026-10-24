@@ -10,9 +10,8 @@ import { ABIX } from '@/components/abix/brandColors';
 
 // TODO: replace with the real ABIXMART handles. These are the values that
 // were already in the file (placeholders).
-const INSTAGRAM_URL = 'https://instagram.com';
-const WHATSAPP_URL = 'https://wa.me/910000000000';
-
+const INSTAGRAM_URL = 'https://www.instagram.com/abixmart/';
+const WHATSAPP_URL = 'https://wa.me/917680014597';
 export default function Footer() {
   const sectionRef = useRef(null);
   const [reduceMotion, setReduceMotion] = useState(false);
