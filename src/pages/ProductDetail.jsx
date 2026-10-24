@@ -1,11 +1,16 @@
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Minus, Plus, ArrowLeft, Heart, ShoppingBag, Check, BookOpen } from 'lucide-react';
 import PageTransition from '@/components/abix/PageTransition';
 import Eyebrow from '@/components/abix/Eyebrow';
-import ShopCollectionCard from '@/components/abix/ShopCollectionCard';
 import ProductReviews from '@/components/abix/reviews/ProductReviews';
+import ProductGallery from '@/components/abix/shop/ProductGallery';
+import GrowingBridge from '@/components/abix/shop/GrowingBridge';
+import WhatsGrowingNext from '@/components/abix/WhatsGrowingNext';
+import { getProductGallery } from '@/lib/productGallery';
+import { useScrollReveal } from '@/hooks/useScrollReveal';
+import { FOCUS_RING } from '@/components/abix/upcoming/livingCollection/theme';
 import { openProductTabs } from '@/data/products';
 import { useCatalog } from '@/lib/CatalogContext';
 import { useShop } from '@/lib/ShopContext';
@@ -33,7 +38,8 @@ const TAB_IMAGES = {
 export default function ProductDetail() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { products, loading, getProductBySlug } = useCatalog();
+  const reduce = useReducedMotion();
+  const { loading, getProductBySlug } = useCatalog();
   const product = getProductBySlug(slug);
   const { addToCart, toggleWishlist, isInWishlist } = useShop();
 
@@ -49,6 +55,10 @@ export default function ProductDetail() {
     null;
   const [packQty, setPackQty] = useState(1);
   const [tab, setTab] = useState('source');
+
+  const rootRef = useRef(null);
+  const gallery = useMemo(() => getProductGallery(product), [product]);
+  useScrollReveal(rootRef, { ready: !loading && Boolean(product) });
 
   if (loading) {
     return (
@@ -80,7 +90,6 @@ export default function ProductDetail() {
   }
 
   const activeTab = openProductTabs.find((t) => t.key === tab);
-  const related = products.filter((p) => p.id !== product.id);
 
   const unitPrice = selectedVariant ? selectedVariant.price : product.price;
   const unitOriginal = selectedVariant ? selectedVariant.originalPrice : product.mrp;
@@ -89,6 +98,7 @@ export default function ProductDetail() {
   // The Origin / Process / Quality / Use story is Shilajit-specific editorial
   // content (openProductTabs), so other products do not show it.
   const hasProductStory = product.slug === 'shilajit';
+  const wishlisted = isInWishlist(product.id);
 
   // CHANGED: navigates to /cart after adding, instead of relying on
   // ShopContext to open CartDrawer (which no longer happens — see
@@ -110,286 +120,309 @@ export default function ProductDetail() {
 
   return (
     <PageTransition>
-      <section className="relative pt-16 lg:pt-20 pb-16 lg:pb-24 overflow-hidden" style={{ background: INK }}>
-        <div className="absolute inset-0 grain opacity-[0.04] pointer-events-none" />
+      <div ref={rootRef}>
+        <section className="relative pt-20 lg:pt-24 pb-16 lg:pb-24 overflow-hidden" style={{ background: INK }}>
+          <div className="absolute inset-0 grain opacity-[0.04] pointer-events-none" />
 
-        <div className="relative mx-auto max-w-7xl px-6 lg:px-10">
-          <Link to="/shop" className="inline-flex items-center gap-2 text-sm transition-colors mb-6" style={{ color: MUTED }}>
-            <ArrowLeft size={16} /> Back to shop
-          </Link>
-
-          <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-start">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.97 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-              className="relative max-w-sm mx-auto lg:mx-0 lg:sticky lg:top-24"
+          <div className="relative mx-auto max-w-7xl px-6 lg:px-10">
+            <Link
+              to="/shop"
+              className={`inline-flex items-center gap-2 min-h-[44px] text-sm transition-colors mb-4 ${FOCUS_RING}`}
+              style={{ color: MUTED }}
             >
-              <div
-                className="relative aspect-square overflow-hidden group rounded-2xl"
-                style={{ background: `linear-gradient(160deg, ${GRAPHITE} 0%, ${INK} 100%)` }}
-              >
-                <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{ background: `radial-gradient(ellipse at 50% 40%, ${AMBER}18, transparent 65%)` }}
+              <ArrowLeft size={16} /> Back to shop
+            </Link>
+
+            <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
+              <div className="w-full max-w-md mx-auto lg:mx-0 lg:sticky lg:top-24">
+                <ProductGallery
+                  images={gallery}
+                  arch
+                  reveal
+                  aspect="4 / 5"
+                  label={`${product.name} images`}
+                  toolbar={
+                    <button
+                      type="button"
+                      onClick={() => toggleWishlist(product.id)}
+                      aria-label={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+                      aria-pressed={wishlisted}
+                      className={`h-11 w-11 inline-flex items-center justify-center rounded-full border transition-colors ${FOCUS_RING}`}
+                      style={{ borderColor: ABIX.ivory25, color: wishlisted ? AMBER : IVORY }}
+                    >
+                      <Heart size={16} className={wishlisted ? 'fill-current' : ''} />
+                    </button>
+                  }
                 />
-                {product.shopImage && (
-                  <img
-                    src={product.shopImage}
-                    alt={product.name}
-                    className="h-full w-full object-contain p-6 transition-transform duration-[1200ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.035]"
-                  />
-                )}
-                {['top-4 left-4 border-t border-l', 'top-4 right-4 border-t border-r', 'bottom-4 left-4 border-b border-l', 'bottom-4 right-4 border-b border-r'].map((pos) => (
-                  <span key={pos} className={`absolute ${pos} w-5 h-5 pointer-events-none`} style={{ borderColor: `${AMBER}50` }} />
-                ))}
-                <span
-                  className="absolute top-4 left-1/2 -translate-x-1/2 label-meta px-2.5 py-1"
-                  style={{ background: `${INK}B3`, color: AMBER }}
-                >
-                  Available
-                </span>
-
-                <button
-                  onClick={() => toggleWishlist(product.id)}
-                  aria-label={isInWishlist(product.id) ? 'Remove from wishlist' : 'Add to wishlist'}
-                  className="absolute top-4 right-4 h-9 w-9 inline-flex items-center justify-center rounded-full backdrop-blur-md transition-colors"
-                  style={{ backgroundColor: `${INK}B3`, color: isInWishlist(product.id) ? AMBER : IVORY }}
-                >
-                  <Heart size={16} className={isInWishlist(product.id) ? 'fill-current' : ''} />
-                </button>
               </div>
-            </motion.div>
 
-            <div>
-              <Eyebrow light>Signature Ritual</Eyebrow>
-              <h1 className="mt-3 font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.02] tracking-tight" style={{ color: IVORY }}>
-                {product.name}
-              </h1>
-              <p className="mt-1.5 font-display text-xl lg:text-2xl italic" style={{ color: AMBER }}>
-                {product.subtitle}
-              </p>
-              <p className="mt-4 text-base leading-relaxed max-w-md" style={{ color: `${IVORY}B3` }}>
-                {product.description}
-              </p>
+              <div>
+                <div data-reveal className="flex items-center gap-4">
+                  <span data-line className="block h-px w-14" style={{ backgroundColor: AMBER_FILL }} />
+                  <Eyebrow light>Signature Ritual</Eyebrow>
+                </div>
+                <h1
+                  data-reveal
+                  data-reveal-delay="0.08"
+                  className="mt-4 font-display text-4xl sm:text-5xl lg:text-6xl leading-[1.02] tracking-tight"
+                  style={{ color: IVORY }}
+                >
+                  {product.name}
+                </h1>
+                <p data-reveal data-reveal-delay="0.14" className="mt-2 font-display text-xl lg:text-2xl italic" style={{ color: AMBER }}>
+                  {product.subtitle}
+                </p>
+                <p data-reveal data-reveal-delay="0.2" className="mt-5 text-base leading-relaxed max-w-md" style={{ color: `${IVORY}B3` }}>
+                  {product.description}
+                </p>
 
-              <dl className="mt-6 grid grid-cols-2 gap-x-8 gap-y-3 max-w-md">
-                {product.facts.map((f) => (
-                  <div key={f.label} className="border-t pt-2.5" style={{ borderColor: `${IVORY}1A` }}>
-                    <dt className="label-meta" style={{ color: MUTED }}>{f.label}</dt>
-                    <dd className="mt-0.5 font-display text-base" style={{ color: IVORY }}>{f.value}</dd>
+                <dl data-reveal data-reveal-delay="0.26" className="mt-7 grid grid-cols-2 gap-x-8 gap-y-4 max-w-md">
+                  {product.facts.map((f) => (
+                    <div key={f.label} className="border-t pt-3" style={{ borderColor: `${IVORY}1A` }}>
+                      <dt className="label-meta" style={{ color: MUTED }}>{f.label}</dt>
+                      <dd className="mt-0.5 font-display text-base" style={{ color: IVORY }}>{f.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+
+                {variants.length > 0 && (
+                  <div data-reveal className="mt-9">
+                    <span className="label-meta" style={{ color: MUTED }}>Choose your ritual</span>
+                    <div role="radiogroup" aria-label="Choose your ritual" className="mt-3 space-y-2.5">
+                      {variants.map((b) => {
+                        const active = selectedVariant?.id === b.id;
+                        const sub = [b.detail, b.note].filter(Boolean).join(' · ');
+                        return (
+                          <button
+                            key={b.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            onClick={() => setSelectedVariantId(b.id)}
+                            className={`w-full flex items-center justify-between gap-4 p-4 border transition-colors duration-300 rounded-lg ${FOCUS_RING}`}
+                            style={{
+                              borderColor: active ? AMBER : `${IVORY}1F`,
+                              background: active ? `${AMBER}0F` : 'transparent',
+                            }}
+                          >
+                            <span className="text-left">
+                              <span className="font-display text-lg" style={{ color: IVORY }}>{b.name}</span>
+                              {sub && <span className="block text-xs mt-0.5" style={{ color: MUTED }}>{sub}</span>}
+                            </span>
+                            <span className="text-right shrink-0">
+                              <span className="font-price text-xl" style={{ color: IVORY }}>₹{b.price}</span>
+                              {b.originalPrice ? (
+                                <span className="block text-xs line-through" style={{ color: MUTED }}>₹{b.originalPrice}</span>
+                              ) : null}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                ))}
-              </dl>
+                )}
 
-              {variants.length > 0 && (
-                <div className="mt-7">
-                  <span className="label-meta" style={{ color: MUTED }}>Choose your ritual</span>
-                  <div className="mt-3 space-y-2">
-                    {variants.map((b) => {
-                      const active = selectedVariant?.id === b.id;
-                      return (
+                {canBuy && (
+                  <>
+                    <div data-reveal className="mt-7 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <span className="font-price text-3xl" style={{ color: IVORY }}>₹{unitPrice}</span>
+                      {unitOriginal ? (
+                        <span className="text-lg line-through" style={{ color: MUTED }}>₹{unitOriginal}</span>
+                      ) : null}
+                      {unitNote ? (
+                        <span className="text-sm font-semibold" style={{ color: AMBER }}>{unitNote}</span>
+                      ) : null}
+                    </div>
+
+                    <div data-reveal className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3">
+                      <div className="inline-flex items-center border h-14 rounded-lg" style={{ borderColor: `${IVORY}30` }}>
                         <button
-                          key={b.id}
-                          onClick={() => setSelectedVariantId(b.id)}
-                          className="w-full flex items-center justify-between p-4 border transition-colors rounded-lg"
-                          style={{
-                            borderColor: active ? AMBER : `${IVORY}1F`,
-                            background: active ? `${AMBER}0F` : 'transparent',
-                          }}
+                          type="button"
+                          onClick={() => setPackQty((q) => Math.max(1, q - 1))}
+                          className={`h-full w-12 inline-flex items-center justify-center transition-colors ${FOCUS_RING}`}
+                          style={{ color: IVORY }}
+                          aria-label="Decrease quantity"
                         >
-                          <span className="text-left">
-                            <span className="font-display text-lg" style={{ color: IVORY }}>{b.name}</span>
-                            <span className="block text-xs" style={{ color: MUTED }}>{b.note}</span>
-                          </span>
-                          <span className="text-right">
-                            <span className="font-price text-xl" style={{ color: IVORY }}>₹{b.price}</span>
-                            {b.originalPrice ? (
-                              <span className="block text-xs line-through" style={{ color: MUTED }}>₹{b.originalPrice}</span>
-                            ) : null}
-                          </span>
+                          <Minus size={16} />
                         </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                        <span className="w-10 text-center font-price text-xl" style={{ color: IVORY }} aria-live="polite">{packQty}</span>
+                        <button
+                          type="button"
+                          onClick={() => setPackQty((q) => q + 1)}
+                          className={`h-full w-12 inline-flex items-center justify-center transition-colors ${FOCUS_RING}`}
+                          style={{ color: IVORY }}
+                          aria-label="Increase quantity"
+                        >
+                          <Plus size={16} />
+                        </button>
+                      </div>
+                      <span className="font-price text-2xl" style={{ color: IVORY }}>
+                        Subtotal: ₹{unitPrice * packQty}
+                      </span>
+                    </div>
 
-              {canBuy && (
-                <>
-                <div className="mt-6 flex items-baseline gap-3">
-                  <span className="font-price text-3xl" style={{ color: IVORY }}>₹{unitPrice}</span>
-                  {unitOriginal ? (
-                    <span className="text-lg line-through" style={{ color: MUTED }}>₹{unitOriginal}</span>
-                  ) : null}
-                  {unitNote ? (
-                    <span className="text-sm font-semibold" style={{ color: AMBER }}>{unitNote}</span>
-                  ) : null}
-                </div>
+                    <div data-reveal className="mt-7">
+                      <button
+                        type="button"
+                        onClick={handleAddToCart}
+                        className={`group w-full sm:w-auto inline-flex items-center justify-center gap-3 h-14 px-9 text-[12px] font-semibold tracking-luxe-sm uppercase rounded-full transition-colors duration-300 hover:brightness-110 ${FOCUS_RING}`}
+                        style={{ background: AMBER_FILL, color: INK }}
+                      >
+                        <ShoppingBag size={16} />
+                        Add to Cart
+                      </button>
+                    </div>
+                  </>
+                )}
 
-                <div className="mt-5 flex items-center gap-5">
-                  <div className="inline-flex items-center border h-14 rounded-lg" style={{ borderColor: `${IVORY}30` }}>
-                    <button
-                      onClick={() => setPackQty((q) => Math.max(1, q - 1))}
-                      className="h-full w-12 inline-flex items-center justify-center transition-colors"
-                      style={{ color: IVORY }}
-                      aria-label="Decrease quantity"
+                <div data-reveal className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                  {product.howToTakeRoute && (
+                    <Link
+                      to={product.howToTakeRoute}
+                      className={`inline-flex items-center justify-center gap-2 h-12 px-6 text-[11px] font-semibold tracking-luxe-sm uppercase border rounded-full transition-colors duration-300 hover:bg-[rgba(199,174,125,0.08)] ${FOCUS_RING}`}
+                      style={{ borderColor: `${AMBER}60`, color: AMBER, background: 'transparent' }}
                     >
-                      <Minus size={16} />
-                    </button>
-                    <span className="w-10 text-center font-price text-xl" style={{ color: IVORY }}>{packQty}</span>
-                    <button
-                      onClick={() => setPackQty((q) => q + 1)}
-                      className="h-full w-12 inline-flex items-center justify-center transition-colors"
-                      style={{ color: IVORY }}
-                      aria-label="Increase quantity"
-                    >
-                      <Plus size={16} />
-                    </button>
-                  </div>
-                  <span className="font-price text-2xl" style={{ color: IVORY }}>
-                    Subtotal: ₹{unitPrice * packQty}
-                  </span>
-                </div>
+                      <BookOpen size={15} />
+                      How To Take Shilajit
+                    </Link>
+                  )}
 
-                <div className="mt-7">
                   <button
-                    onClick={handleAddToCart}
-                    className="group w-full sm:w-auto inline-flex items-center justify-center gap-3 h-14 px-9 text-[12px] font-semibold tracking-luxe-sm uppercase rounded-full transition-colors duration-300"
-                    style={{ background: AMBER_FILL, color: INK }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = AMBER; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = AMBER_FILL; }}
+                    type="button"
+                    onClick={handleSendInquiry}
+                    className={`min-h-[44px] text-sm underline underline-offset-4 transition-colors ${FOCUS_RING}`}
+                    style={{ color: MUTED }}
                   >
-                    <ShoppingBag size={16} />
-                    Add to Cart
+                    Or send a product inquiry
                   </button>
                 </div>
-                </>
-              )}
 
-              <div className="mt-4 flex flex-col sm:flex-row gap-3">
-                {product.howToTakeRoute && (
-                  <Link
-                    to={product.howToTakeRoute}
-                    className="inline-flex items-center justify-center gap-2 h-12 px-6 text-[11px] font-semibold tracking-luxe-sm uppercase border rounded-full transition-colors duration-300"
-                    style={{ borderColor: `${AMBER}60`, color: AMBER, background: 'transparent' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = `${AMBER}14`; e.currentTarget.style.borderColor = AMBER; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = `${AMBER}60`; }}
-                  >
-                    <BookOpen size={15} />
-                    How To Take Shilajit
-                  </Link>
-                )}
-
-                <button onClick={handleSendInquiry} className="text-sm underline underline-offset-4 transition-colors" style={{ color: MUTED }}>
-                  Or send a product inquiry
-                </button>
+                <ul data-reveal className="mt-8 space-y-3">
+                  {product.howToUse.map((h) => (
+                    <li key={h} className="flex gap-3 text-sm leading-relaxed" style={{ color: `${IVORY}CC` }}>
+                      <Check size={15} className="mt-0.5 shrink-0" style={{ color: AMBER }} />
+                      <span>{h}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-
-              <ul className="mt-7 space-y-2.5">
-                {product.howToUse.map((h) => (
-                  <li key={h} className="flex gap-3 text-sm leading-relaxed" style={{ color: `${IVORY}CC` }}>
-                    <Check size={15} className="mt-0.5 shrink-0" style={{ color: AMBER }} />
-                    <span>{h}</span>
-                  </li>
-                ))}
-              </ul>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {hasProductStory && (
-        <section className="py-16 lg:py-24 border-t" style={{ background: GRAPHITE, borderColor: `${IVORY}0D` }}>
-          <div className="mx-auto max-w-7xl px-6 lg:px-10">
-            <div className="max-w-2xl mb-10">
-              <Eyebrow light>The Product Story</Eyebrow>
-              <h2 className="mt-5 font-display text-4xl sm:text-5xl leading-[1.02] tracking-tight" style={{ color: IVORY }}>
-                Origin. Process. Quality. Use.
-              </h2>
-            </div>
-
-            <div className="grid lg:grid-cols-12 gap-10 lg:gap-16 items-stretch">
-              <div className="lg:col-span-5 flex flex-col">
-                {openProductTabs.map((t) => {
-                  const on = t.key === tab;
-                  return (
-                    <button
-                      key={t.key}
-                      onClick={() => setTab(t.key)}
-                      className="group text-left py-7 border-b transition-colors duration-300"
-                      style={{ borderColor: `${IVORY}14`, color: on ? IVORY : MUTED }}
-                    >
-                      <div className="flex items-baseline justify-between">
-                        <span className="font-display text-3xl lg:text-4xl leading-tight">{t.label}</span>
-                        <span
-                          className="text-2xl transition-transform duration-300"
-                          style={{ color: on ? AMBER : MUTED, opacity: on ? 1 : 0, transform: on ? 'translateX(4px)' : 'translateX(0)' }}
-                        >
-                          →
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
+        {hasProductStory && (
+          <section className="py-16 lg:py-24 border-t" style={{ background: GRAPHITE, borderColor: `${IVORY}0D` }}>
+            <div className="mx-auto max-w-7xl px-6 lg:px-10">
+              <div className="max-w-2xl mb-10 lg:mb-14">
+                <div data-reveal className="flex items-center gap-4">
+                  <span data-line className="block h-px w-14" style={{ backgroundColor: AMBER_FILL }} />
+                  <Eyebrow light>The Product Story</Eyebrow>
+                </div>
+                <h2
+                  data-reveal
+                  data-reveal-delay="0.08"
+                  className="mt-5 font-display text-4xl sm:text-5xl leading-[1.02] tracking-tight"
+                  style={{ color: IVORY }}
+                >
+                  Origin. Process. Quality. Use.
+                </h2>
               </div>
 
-              <div className="lg:col-span-7">
-                <div className="relative h-full min-h-[420px] overflow-hidden grain" style={{ background: INK }}>
-                  <AnimatePresence mode="wait">
-                    <motion.img
-                      key={tab}
-                      src={TAB_IMAGES[tab]}
-                      alt={activeTab.label}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 0.45 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.6 }}
-                      className="absolute inset-0 h-full w-full object-cover"
-                    />
-                  </AnimatePresence>
-                  <div className="absolute inset-0" style={{ background: `linear-gradient(0deg, ${INK} 10%, ${INK}B3 55%, ${INK}66 100%)` }} />
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={tab}
-                      initial={{ opacity: 0, y: 28 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -16 }}
-                      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                      className="relative z-10 h-full flex flex-col justify-end p-8 lg:p-12"
-                    >
-                      <span className="label-meta" style={{ color: AMBER }}>{activeTab.label}</span>
-                      <h3 className="mt-4 font-display text-3xl lg:text-4xl leading-tight" style={{ color: IVORY }}>{activeTab.title}</h3>
-                      <p className="mt-4 text-lg leading-relaxed max-w-md" style={{ color: `${IVORY}CC` }}>{activeTab.body}</p>
-                    </motion.div>
-                  </AnimatePresence>
+              <div className="grid lg:grid-cols-12 gap-8 lg:gap-16 items-stretch">
+                <div
+                  role="tablist"
+                  aria-label="Product story"
+                  className="lg:col-span-5 flex lg:flex-col gap-2 lg:gap-0 overflow-x-auto no-scrollbar -mx-6 px-6 lg:mx-0 lg:px-0"
+                >
+                  {openProductTabs.map((t, i) => {
+                    const on = t.key === tab;
+                    return (
+                      <button
+                        key={t.key}
+                        type="button"
+                        role="tab"
+                        id={`story-tab-${t.key}`}
+                        aria-selected={on}
+                        aria-controls="story-panel"
+                        onClick={() => setTab(t.key)}
+                        className={`group shrink-0 text-left py-3 lg:py-6 px-3 lg:px-0 lg:border-b transition-colors duration-300 ${FOCUS_RING}`}
+                        style={{ borderColor: `${IVORY}14`, color: on ? IVORY : MUTED }}
+                      >
+                        <div className="flex items-baseline gap-4 lg:justify-between">
+                          <span className="flex items-baseline gap-3">
+                            <span className="font-grotesk text-[10px] tracking-luxe-sm" style={{ color: AMBER_FILL }}>
+                              {String(i + 1).padStart(2, '0')}
+                            </span>
+                            <span className="font-display text-2xl lg:text-4xl leading-tight whitespace-nowrap">{t.label}</span>
+                          </span>
+                          <span
+                            aria-hidden="true"
+                            className="hidden lg:block text-2xl transition-transform duration-300"
+                            style={{ color: on ? AMBER : MUTED, opacity: on ? 1 : 0, transform: on ? 'translateX(4px)' : 'translateX(0)' }}
+                          >
+                            →
+                          </span>
+                        </div>
+                        <span
+                          aria-hidden="true"
+                          className="block h-px mt-3 transition-[width] duration-700 ease-out"
+                          style={{ width: on ? '100%' : '0%', background: AMBER_FILL }}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="lg:col-span-7">
+                  <div
+                    id="story-panel"
+                    role="tabpanel"
+                    aria-labelledby={`story-tab-${tab}`}
+                    className="relative h-full min-h-[380px] lg:min-h-[440px] overflow-hidden grain"
+                    style={{ background: INK }}
+                  >
+                    <AnimatePresence mode="wait">
+                      <motion.img
+                        key={tab}
+                        src={TAB_IMAGES[tab]}
+                        alt={activeTab.label}
+                        initial={{ opacity: 0, scale: reduce ? 1 : 1.08 }}
+                        animate={{ opacity: 0.45, scale: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: reduce ? 0.2 : 1.2, ease: [0.16, 1, 0.3, 1] }}
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                    </AnimatePresence>
+                    <div className="absolute inset-0" style={{ background: `linear-gradient(0deg, ${INK} 10%, ${INK}B3 55%, ${INK}66 100%)` }} />
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={tab}
+                        initial={{ opacity: 0, y: reduce ? 0 : 28 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: reduce ? 0 : -16 }}
+                        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                        className="relative z-10 h-full min-h-[380px] lg:min-h-[440px] flex flex-col justify-end p-7 lg:p-12"
+                      >
+                        <span className="label-meta" style={{ color: AMBER }}>{activeTab.label}</span>
+                        <h3 className="mt-4 font-display text-3xl lg:text-4xl leading-tight" style={{ color: IVORY }}>{activeTab.title}</h3>
+                        <p className="mt-4 text-base lg:text-lg leading-relaxed max-w-md" style={{ color: `${IVORY}CC` }}>{activeTab.body}</p>
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </section>
-      )}
+          </section>
+        )}
 
-      {/* H1.1: customer reviews for this product (approved reviews only). */}
-      <ProductReviews product={product} />
+        {/* H1.1: customer reviews for this product (approved reviews only). */}
+        <ProductReviews product={product} />
 
-      {related.length > 0 && (
-        <section className="py-16 lg:py-24 border-t" style={{ background: GRAPHITE, borderColor: `${IVORY}0D` }}>
-          <div className="mx-auto max-w-7xl px-6 lg:px-10">
-            <div className="max-w-2xl mb-10 lg:mb-14">
-              <Eyebrow light>More From The Collection</Eyebrow>
-              <h2 className="mt-4 font-display text-3xl sm:text-4xl leading-tight" style={{ color: IVORY }}>
-                Explore the rest of ABIXMART.
-              </h2>
-            </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-              {related.map((p, i) => (
-                <ShopCollectionCard key={p.id} product={p} index={i} />
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
+        {/* Replaces the old related-products grid: a short bridge, then the
+            existing upcoming-products experience (pre-order actions included). */}
+        <GrowingBridge />
+        <WhatsGrowingNext />
+      </div>
     </PageTransition>
   );
 }

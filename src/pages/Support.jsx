@@ -1259,7 +1259,7 @@ export default function Support() {
 
           <div className="mt-9 flex flex-col sm:flex-row gap-3 justify-center">
             <a
-              href="https://wa.me/910000000000"
+              href="https://wa.me/917680014597"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center justify-center h-14 px-8 text-charcoal text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300"

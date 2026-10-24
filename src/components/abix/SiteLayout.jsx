@@ -6,6 +6,7 @@ import AbixmartAssist from './AbixmartAssist';
 import CartDrawer from './CartDrawer';
 import SearchOverlay from './SearchOverlay';
 import CheckoutModal from './CheckoutModal';
+import { RitualTransition } from './PageTransition';
 
 // Shared site chrome — header, footer, assist, cart, search, checkout.
 // Pages render into <Outlet />.
@@ -15,6 +16,9 @@ import CheckoutModal from './CheckoutModal';
 // continuous dark environment" the rest of the palette is built around.
 // Swapped to bg-charcoal so any sliver visible outside a page's own
 // section backgrounds is dark, not a flash of light ivory.
+//
+// CHANGED: <RitualTransition /> — the Shop <-> Product Detail overlay.
+// Renders nothing visible until that navigation happens.
 export default function SiteLayout() {
   return (
     <div className="bg-charcoal min-h-screen flex flex-col">
@@ -27,6 +31,7 @@ export default function SiteLayout() {
       <CartDrawer />
       <SearchOverlay />
       <CheckoutModal />
+      <RitualTransition />
     </div>
   );
 }
