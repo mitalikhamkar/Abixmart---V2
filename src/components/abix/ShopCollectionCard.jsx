@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Bell, Check, X, Heart } from 'lucide-react';
 import { useProductNotify } from '@/hooks/useProductNotify';
 import { useShop } from '@/lib/ShopContext';
+import { useUpcoming } from '@/lib/upcomingContext';
 
 const PENDING_NOTIFY_KEY = 'abixmart_pending_notify';
 
@@ -13,6 +14,9 @@ export default function ShopCollectionCard({ product, index = 0 }) {
   const isAvailable = product.status === 'available';
   const { status, subscribe, isLoggedIn } = useProductNotify(product.id, product.name);
   const { toggleWishlist, isInWishlist } = useShop();
+  // CHANGED: Coming Soon cards now open the shared product-information view
+  // and the pre-order interest form.
+  const { openView, openPreOrder } = useUpcoming();
   const [dismissed, setDismissed] = React.useState(false);
 
   const handleNotifyClick = () => {
@@ -93,33 +97,56 @@ export default function ShopCollectionCard({ product, index = 0 }) {
           >
             Explore Product
           </Link>
-        ) : showConfirmation ? (
-          <div className="mt-5 border border-[#BE8A4B]/30 bg-[#BE8A4B]/10 p-4">
-            <p className="text-xs font-semibold uppercase tracking-luxe-sm text-[#D3A467]">You're On The List</p>
-            <p className="mt-1.5 text-sm text-[#A79C8D] leading-relaxed">
-              We'll let you know when {product.name} becomes available.
-            </p>
-            <button
-              onClick={() => setDismissed(true)}
-              className="mt-3 inline-flex items-center gap-1.5 text-xs text-[#A79C8D] hover:text-[#F2ECE2] transition-colors"
-            >
-              <X size={12} /> Close
-            </button>
-          </div>
-        ) : showAlready ? (
-          <div className="mt-5 inline-flex items-center gap-2 h-12 px-4 border border-[#F2ECE2]/15 text-[#A79C8D] text-[11px] font-semibold tracking-luxe-sm uppercase">
-            <Check size={14} className="text-[#D3A467]" />
-            Already On The List
-          </div>
         ) : (
-          <button
-            onClick={handleNotifyClick}
-            disabled={status === 'submitting'}
-            className="mt-5 inline-flex items-center justify-center gap-2 h-12 border border-[#F2ECE2]/20 text-[#F2ECE2] text-[11px] font-semibold tracking-luxe-sm uppercase hover:border-[#BE8A4B] hover:bg-[#BE8A4B] hover:text-[#151417] transition-colors duration-300 disabled:opacity-50"
-          >
-            <Bell size={14} />
-            {status === 'submitting' ? 'Saving…' : 'Notify Me'}
-          </button>
+          <>
+            {/* NEW: shared upcoming-product actions (same views as Home,
+                Shop and About). Pre-order is an expression of interest only. */}
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => openView(product)}
+                className="inline-flex items-center justify-center h-12 border border-[#F2ECE2]/20 text-[#F2ECE2] text-[11px] font-semibold tracking-luxe-sm uppercase hover:bg-white/10 transition-colors duration-300"
+              >
+                Learn more
+              </button>
+              <button
+                type="button"
+                onClick={() => openPreOrder(product)}
+                className="inline-flex items-center justify-center h-12 border border-[#BE8A4B]/60 text-[#D3A467] text-[11px] font-semibold tracking-luxe-sm uppercase hover:bg-[#BE8A4B] hover:text-[#151417] hover:border-[#BE8A4B] transition-colors duration-300"
+              >
+                Pre-order
+              </button>
+            </div>
+
+            {showConfirmation ? (
+              <div className="mt-3 border border-[#BE8A4B]/30 bg-[#BE8A4B]/10 p-4">
+                <p className="text-xs font-semibold uppercase tracking-luxe-sm text-[#D3A467]">You're On The List</p>
+                <p className="mt-1.5 text-sm text-[#A79C8D] leading-relaxed">
+                  We'll let you know when {product.name} becomes available.
+                </p>
+                <button
+                  onClick={() => setDismissed(true)}
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs text-[#A79C8D] hover:text-[#F2ECE2] transition-colors"
+                >
+                  <X size={12} /> Close
+                </button>
+              </div>
+            ) : showAlready ? (
+              <div className="mt-3 inline-flex items-center gap-2 h-12 px-4 border border-[#F2ECE2]/15 text-[#A79C8D] text-[11px] font-semibold tracking-luxe-sm uppercase">
+                <Check size={14} className="text-[#D3A467]" />
+                Already On The List
+              </div>
+            ) : (
+              <button
+                onClick={handleNotifyClick}
+                disabled={status === 'submitting'}
+                className="mt-3 inline-flex items-center justify-center gap-2 h-12 border border-[#F2ECE2]/20 text-[#F2ECE2] text-[11px] font-semibold tracking-luxe-sm uppercase hover:border-[#BE8A4B] hover:bg-[#BE8A4B] hover:text-[#151417] transition-colors duration-300 disabled:opacity-50"
+              >
+                <Bell size={14} />
+                {status === 'submitting' ? 'Saving…' : 'Notify Me'}
+              </button>
+            )}
+          </>
         )}
       </div>
     </motion.div>

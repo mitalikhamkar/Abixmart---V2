@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Bell, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useCatalog } from '@/lib/CatalogContext';
+import { useUpcoming } from '@/lib/upcomingContext';
 import { useProductNotify } from '@/hooks/useProductNotify';
 import { ABIX } from './brandColors';
 
@@ -11,9 +12,17 @@ const PENDING_NOTIFY_KEY = 'abixmart_pending_notify';
 // Card is intentionally its own component so each one's notify hook
 // state is independent — same interaction pattern as the existing
 // ComingSoonMiniCard, just sized for the marquee track.
-function MarqueeCard({ product }) {
+//
+// CHANGED: the image and name now open the shared product-information view,
+// and a "Pre-order" action sits beside the Notify Me bell. The Notify Me
+// behaviour is unchanged. `decorative` marks the duplicate copy that makes
+// the loop seamless, so keyboard and screen-reader users meet each product
+// once.
+function MarqueeCard({ product, decorative = false }) {
   const navigate = useNavigate();
+  const { openView, openPreOrder } = useUpcoming();
   const { status, subscribe, isLoggedIn } = useProductNotify(product.id, product.name);
+  const tab = decorative ? -1 : undefined;
 
   const handleClick = (e) => {
     e.preventDefault();
@@ -32,33 +41,55 @@ function MarqueeCard({ product }) {
     <div
       className="group relative shrink-0 w-[78vw] sm:w-[46vw] md:w-[30vw] lg:w-[300px] overflow-hidden rounded-xl border transition-[border-color,transform] duration-500"
       style={{ borderColor: ABIX.ivory12 }}
+      aria-hidden={decorative ? 'true' : undefined}
     >
-      <div className="relative aspect-[4/5] overflow-hidden">
-        {product.shopImage && (
-          <img
-            src={product.shopImage}
-            alt={product.name}
-            draggable={false}
-            className="h-full w-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-[1.05]"
+      <button
+        type="button"
+        onClick={() => openView(product)}
+        tabIndex={tab}
+        aria-label={`View ${product.name}`}
+        className="block w-full text-left"
+      >
+        <span className="relative block aspect-[4/5] overflow-hidden">
+          {product.shopImage && (
+            <img
+              src={product.shopImage}
+              alt={product.name}
+              draggable={false}
+              className="h-full w-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-[1.05]"
+            />
+          )}
+          <span className="absolute inset-0" style={{ background: `linear-gradient(0deg, ${ABIX.obsidian}CC 0%, transparent 55%)` }} />
+
+          {/* Subtle emphasis on hover — border brightens slightly, no jump */}
+          <span
+            className="absolute inset-0 pointer-events-none transition-opacity duration-500 opacity-0 group-hover:opacity-100"
+            style={{ boxShadow: `inset 0 0 0 1px ${ABIX.gold25}` }}
           />
-        )}
-        <div className="absolute inset-0" style={{ background: `linear-gradient(0deg, ${ABIX.obsidian}CC 0%, transparent 55%)` }} />
+        </span>
 
-        {/* Subtle emphasis on hover — border brightens slightly, no jump */}
-        <div
-          className="absolute inset-0 pointer-events-none transition-opacity duration-500 opacity-0 group-hover:opacity-100"
-          style={{ boxShadow: `inset 0 0 0 1px ${ABIX.gold25}` }}
-        />
-      </div>
+        <span className="block px-4 pt-4">
+          <span className="block font-display text-lg leading-tight truncate" style={{ color: ABIX.ivory }}>{product.name}</span>
+        </span>
+      </button>
 
-      <div className="p-4">
-        <h4 className="font-display text-lg leading-tight truncate" style={{ color: ABIX.ivory }}>{product.name}</h4>
-        <div className="mt-1.5 flex items-center justify-between">
-          <span className="text-[9px] font-semibold uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>
-            Coming Soon
-          </span>
+      <div className="px-4 pb-4 pt-1.5 flex items-center justify-between">
+        <span className="text-[9px] font-semibold uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>
+          Coming Soon
+        </span>
+        <span className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => openPreOrder(product)}
+            tabIndex={tab}
+            className="text-[9px] font-semibold uppercase tracking-luxe-sm underline-offset-4 hover:underline"
+            style={{ color: ABIX.goldLight }}
+          >
+            Pre-order
+          </button>
           <button
             onClick={handleClick}
+            tabIndex={tab}
             disabled={status === 'submitting'}
             aria-label={subscribed ? 'On the notify list' : 'Notify me'}
             className="shrink-0 transition-colors"
@@ -66,14 +97,14 @@ function MarqueeCard({ product }) {
           >
             {subscribed ? <Check size={14} /> : <Bell size={14} />}
           </button>
-        </div>
+        </span>
       </div>
     </div>
   );
 }
 
 // NEW — shared continuous product reel, reused wherever "Coming Soon"
-// appears (Home, Shop, About). Pulls from the Firestore-backed
+// appears (Shop, About). Pulls from the Firestore-backed
 // catalog (status === 'coming_soon'), so a product set to Coming Soon
 // in Admin is automatically picked up here with no changes to this
 // file or any page using it.
@@ -132,7 +163,7 @@ export default function ComingSoonMarquee() {
         onMouseLeave={(e) => { e.currentTarget.style.animationPlayState = 'running'; }}
       >
         {[...comingSoon, ...comingSoon].map((p, i) => (
-          <MarqueeCard key={`${p.id}-${i}`} product={p} />
+          <MarqueeCard key={`${p.id}-${i}`} product={p} decorative={i >= comingSoon.length} />
         ))}
       </div>
     </div>

@@ -6,7 +6,7 @@ import PageNotFound from './lib/PageNotFound';
 import ScrollToTop from './components/ScrollToTop';
 import Home from '@/pages/Home';
 import Shop from '@/pages/Shop';
-import ProductDetail from '@/pages/ProductDetail';
+import ProductRoute from '@/pages/ProductRoute';
 import HowToTakeShilajit from '@/pages/HowToTakeShilajit';
 import About from '@/pages/About';
 import Support from '@/pages/Support';
@@ -18,6 +18,7 @@ import AuthAction from '@/pages/AuthAction';
 import Cart from '@/pages/Cart';
 import Wishlist from '@/pages/Wishlist';
 import SiteLayout from '@/components/abix/SiteLayout';
+import UpcomingProvider from '@/components/abix/upcoming/UpcomingProvider';
 import { ShopProvider } from '@/lib/ShopContext';
 import { CatalogProvider } from '@/lib/CatalogContext';
 import { AuthProvider } from '@/lib/AuthContext';
@@ -31,6 +32,7 @@ import Customers from '@/admin/sections/Customers';
 import Orders from '@/admin/sections/Orders';
 import Products from '@/admin/sections/Products';
 import Inquiries from '@/admin/sections/Inquiries';
+import PreOrders from '@/admin/sections/PreOrders';
 import Analytics from '@/admin/sections/Analytics';
 import CustomerActivity from '@/admin/sections/CustomerActivity';
 import Acquisition from '@/admin/sections/Acquisition';
@@ -47,51 +49,59 @@ function App() {
           <ShopProvider>
             <Router>
               <ScrollToTop />
-              <Routes>
-                <Route element={<SiteLayout />}>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/shop" element={<Shop />} />
-                  <Route path="/shop/:slug" element={<ProductDetail />} />
-                  <Route path="/how-to-take-shilajit" element={<HowToTakeShilajit />} />
-                  <Route path="/about" element={<About />} />
-                  <Route path="/support" element={<Support />} />
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/create-account" element={<CreateAccount />} />
-                  <Route path="/forgot-password" element={<ForgotPassword />} />
-                  <Route path="/account" element={<Account />} />
-                  <Route path="/auth/action" element={<AuthAction />} />
-                  <Route path="/cart" element={<Cart />} />
-                  <Route path="/wishlist" element={<Wishlist />} />
-                </Route>
-
-                <Route element={<AdminAuthProvider><Outlet /></AdminAuthProvider>}>
-                  <Route path="/admin/login" element={<AdminLogin />} />
-                  <Route
-                    path="/admin"
-                    element={
-                      <AdminGuard>
-                        <AdminLayout />
-                      </AdminGuard>
-                    }
-                  >
-                    <Route index element={<Navigate to="overview" replace />} />
-                    <Route path="overview" element={<Overview />} />
-                    <Route path="customers" element={<Customers />} />
-                    <Route path="orders" element={<Orders />} />
-                    <Route path="products" element={<Products />} />
-                    <Route path="inquiries" element={<Inquiries />} />
-                    <Route path="reviews" element={<Reviews />} />
-                    <Route path="analytics" element={<Analytics />} />
-                    <Route path="customer-activity" element={<CustomerActivity />} />
-                    <Route path="acquisition" element={<Acquisition />} />
-                    <Route path="product-performance" element={<ProductPerformance />} />
-                    <Route path="community" element={<Community />} />
-                    <Route path="settings" element={<Settings />} />
+              {/* NEW: owns the shared upcoming-product view and pre-order
+                  form. It must sit inside <Router> (it closes on navigation)
+                  and inside <CatalogProvider>. */}
+              <UpcomingProvider>
+                <Routes>
+                  <Route element={<SiteLayout />}>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/shop" element={<Shop />} />
+                    {/* CHANGED: ProductRoute shows the upcoming product page
+                        for Coming Soon products and ProductDetail otherwise. */}
+                    <Route path="/shop/:slug" element={<ProductRoute />} />
+                    <Route path="/how-to-take-shilajit" element={<HowToTakeShilajit />} />
+                    <Route path="/about" element={<About />} />
+                    <Route path="/support" element={<Support />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/create-account" element={<CreateAccount />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/account" element={<Account />} />
+                    <Route path="/auth/action" element={<AuthAction />} />
+                    <Route path="/cart" element={<Cart />} />
+                    <Route path="/wishlist" element={<Wishlist />} />
                   </Route>
-                </Route>
 
-                <Route path="*" element={<PageNotFound />} />
-              </Routes>
+                  <Route element={<AdminAuthProvider><Outlet /></AdminAuthProvider>}>
+                    <Route path="/admin/login" element={<AdminLogin />} />
+                    <Route
+                      path="/admin"
+                      element={
+                        <AdminGuard>
+                          <AdminLayout />
+                        </AdminGuard>
+                      }
+                    >
+                      <Route index element={<Navigate to="overview" replace />} />
+                      <Route path="overview" element={<Overview />} />
+                      <Route path="customers" element={<Customers />} />
+                      <Route path="orders" element={<Orders />} />
+                      <Route path="products" element={<Products />} />
+                      <Route path="inquiries" element={<Inquiries />} />
+                      <Route path="pre-orders" element={<PreOrders />} />
+                      <Route path="reviews" element={<Reviews />} />
+                      <Route path="analytics" element={<Analytics />} />
+                      <Route path="customer-activity" element={<CustomerActivity />} />
+                      <Route path="acquisition" element={<Acquisition />} />
+                      <Route path="product-performance" element={<ProductPerformance />} />
+                      <Route path="community" element={<Community />} />
+                      <Route path="settings" element={<Settings />} />
+                    </Route>
+                  </Route>
+
+                  <Route path="*" element={<PageNotFound />} />
+                </Routes>
+              </UpcomingProvider>
             </Router>
             <Toaster />
           </ShopProvider>
