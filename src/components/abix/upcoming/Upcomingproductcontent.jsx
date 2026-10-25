@@ -1,5 +1,5 @@
 // src/components/abix/upcoming/UpcomingProductContent.jsx
-//
+
 // The product-information view for an upcoming product. Used inside the
 // dialog (UpcomingProductView) and on the full product page
 // (UpcomingProductPage), so both always show the same thing.
