@@ -11,7 +11,7 @@ import {
   PRE_BOOKINGS_COLLECTION,
   PRE_BOOKING_STATUSES,
   TIMING_LABELS,
-} from '@/lib/Prebookingconfig';
+} from '@/lib/preBookingConfig';
 
 // Pre-order INTEREST requests from the website (collection `preBookings`).
 // These are expressions of interest only: no order, reservation or payment
