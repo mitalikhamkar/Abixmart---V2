@@ -121,7 +121,7 @@ export default function ProductDetail() {
   return (
     <PageTransition>
       <div ref={rootRef}>
-        <section className="relative pt-20 lg:pt-24 pb-16 lg:pb-24 overflow-hidden" style={{ background: INK }}>
+        <section className="relative pt-20 lg:pt-24 pb-16 lg:pb-24 overflow-x-clip" style={{ background: INK }}>
           <div className="absolute inset-0 grain opacity-[0.04] pointer-events-none" />
 
           <div className="relative mx-auto max-w-7xl px-6 lg:px-10">
@@ -133,7 +133,7 @@ export default function ProductDetail() {
               <ArrowLeft size={16} /> Back to shop
             </Link>
 
-            <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
+            <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-2 gap-10 lg:gap-20 items-start">
               <div className="w-full max-w-md mx-auto lg:mx-0 lg:sticky lg:top-24">
                 <ProductGallery
                   images={gallery}
@@ -328,7 +328,7 @@ export default function ProductDetail() {
                 </h2>
               </div>
 
-              <div className="grid lg:grid-cols-12 gap-8 lg:gap-16 items-stretch">
+              <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-12 gap-8 lg:gap-16 items-stretch">
                 <div
                   role="tablist"
                   aria-label="Product story"

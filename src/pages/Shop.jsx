@@ -42,8 +42,12 @@ function FeaturedProduct({ product, onQuickView }) {
   const lead = product.shortDesc || product.description;
 
   return (
-    <div id={`product-${product.slug}`} className="grid lg:grid-cols-12 gap-12 lg:gap-16 items-center scroll-mt-28">
-      <div className="lg:col-span-6">
+    <div
+      id={`product-${product.slug}`}
+      // minmax(0, 1fr): on phones the single column can never grow wider than the screen
+      className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-12 gap-10 lg:gap-16 items-center scroll-mt-28"
+    >
+      <div className="lg:col-span-6 min-w-0">
         <div className="mx-auto w-full max-w-md lg:max-w-none lg:mx-0 lg:pr-6">
           <ProductGallery
             images={gallery}
@@ -68,7 +72,7 @@ function FeaturedProduct({ product, onQuickView }) {
         </div>
       </div>
 
-      <div className="lg:col-span-6">
+      <div className="lg:col-span-6 min-w-0">
         <div data-reveal className="flex items-center gap-4">
           <span data-line className="block h-px w-14" style={{ backgroundColor: ABIX.gold }} />
           <span className="inline-flex items-center gap-2 font-grotesk text-[11px] uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>
@@ -97,9 +101,9 @@ function FeaturedProduct({ product, onQuickView }) {
         )}
 
         {facts.length > 0 && (
-          <dl data-reveal data-reveal-delay="0.26" className="mt-7 grid grid-cols-3 gap-4 max-w-md">
+          <dl data-reveal data-reveal-delay="0.26" className="mt-7 grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-md">
             {facts.map((f) => (
-              <div key={f.label} className="border-t pt-3" style={{ borderColor: ABIX.ivory12 }}>
+              <div key={f.label} className="border-t pt-3 min-w-0" style={{ borderColor: ABIX.ivory12 }}>
                 <dt className="label-meta" style={{ color: ABIX.ivory45 }}>{f.label}</dt>
                 <dd className="mt-1 font-display text-base leading-snug" style={{ color: ABIX.ivory }}>{f.value}</dd>
               </div>
@@ -108,7 +112,7 @@ function FeaturedProduct({ product, onQuickView }) {
         )}
 
         {from && (
-          <div data-reveal data-reveal-delay="0.32" className="mt-8 flex items-baseline gap-3">
+          <div data-reveal data-reveal-delay="0.32" className="mt-8 flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <span className="label-meta" style={{ color: ABIX.ivory45 }}>From</span>
             <span className="font-price text-4xl" style={{ color: ABIX.ivory }}>
               {product.currency}{from.price}
@@ -121,10 +125,11 @@ function FeaturedProduct({ product, onQuickView }) {
           </div>
         )}
 
-        <div data-reveal data-reveal-delay="0.38" className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
+        {/* mobile: two full-width buttons, stacked. desktop: side by side */}
+        <div data-reveal data-reveal-delay="0.38" className="mt-8 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
           <Link
             to={`/shop/${product.slug}`}
-            className={`group inline-flex items-center justify-center h-14 px-9 text-[12px] font-semibold tracking-luxe-sm uppercase rounded-full transition-colors duration-300 hover:brightness-110 ${FOCUS_RING}`}
+            className={`group inline-flex w-full sm:w-auto items-center justify-center h-14 px-8 text-[12px] font-semibold tracking-luxe-sm uppercase rounded-full transition-colors duration-300 hover:brightness-110 ${FOCUS_RING}`}
             style={{ background: ABIX.gold, color: FOREST.deepest }}
           >
             Discover the ritual
@@ -133,10 +138,10 @@ function FeaturedProduct({ product, onQuickView }) {
           <button
             type="button"
             onClick={onQuickView}
-            className={`inline-flex items-center gap-2 min-h-[44px] text-[11px] font-semibold uppercase tracking-luxe-sm underline-offset-4 hover:underline ${FOCUS_RING}`}
-            style={{ color: ABIX.goldLight }}
+            className={`inline-flex w-full sm:w-auto items-center justify-center gap-2 h-14 px-8 text-[12px] font-semibold uppercase tracking-luxe-sm border rounded-full transition-colors duration-300 hover:bg-[rgba(199,174,125,0.08)] ${FOCUS_RING}`}
+            style={{ color: ABIX.goldLight, borderColor: `${ABIX.goldLight}66` }}
           >
-            <Eye size={14} /> Quick look
+            <Eye size={15} /> Quick look
           </button>
         </div>
       </div>
@@ -156,9 +161,11 @@ export default function Shop() {
   useScrollReveal(rootRef, { ready: !loading });
 
   // Restrained parallax: the drifting leaf light moves a little slower than the page.
+  // Large screens only, so phones stay light.
   useGSAP(
     () => {
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !leafRef.current) return;
+      if (!window.matchMedia('(min-width: 1024px)').matches) return;
       gsap.to(leafRef.current, {
         yPercent: -14,
         ease: 'none',
@@ -209,7 +216,7 @@ export default function Shop() {
     <PageTransition>
       {returnBanner && (
         <div
-          className="fixed top-20 left-1/2 -translate-x-1/2 z-50 border px-5 py-3.5 flex items-center gap-3 shadow-lg"
+          className="fixed top-20 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-2rem)] border px-5 py-3.5 flex items-center gap-3 shadow-lg"
           style={{ backgroundColor: ABIX.obsidian, borderColor: ABIX.gold25, color: ABIX.ivory }}
         >
           <Check size={16} style={{ color: ABIX.gold }} className="shrink-0" />
@@ -224,7 +231,7 @@ export default function Shop() {
 
       <div ref={rootRef}>
         <section
-          className="relative pt-28 lg:pt-36 pb-20 lg:pb-28 overflow-hidden grain"
+          className="relative pt-24 lg:pt-36 pb-16 lg:pb-28 overflow-x-clip grain"
           style={{ background: `linear-gradient(180deg, ${ABIX.obsidian} 0%, ${FOREST.deep} 55%, ${FOREST.deepest} 100%)` }}
         >
           <div ref={leafRef} className="absolute inset-0 pointer-events-none">
@@ -234,7 +241,7 @@ export default function Shop() {
           <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10">
             {/* introduction + secondary search */}
             <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8 lg:gap-12">
-              <div className="max-w-2xl">
+              <div className="max-w-2xl min-w-0">
                 <div data-reveal className="flex items-center gap-4">
                   <span data-line className="block h-px w-14" style={{ backgroundColor: ABIX.gold }} />
                   <span className="font-grotesk text-[11px] font-medium uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>
@@ -270,7 +277,7 @@ export default function Shop() {
             </div>
 
             {/* featured experience */}
-            <div className="mt-14 lg:mt-20">
+            <div className="mt-12 lg:mt-20">
               {loading && (
                 <p className="text-center py-16" style={{ color: ABIX.ivory45 }}>Loading the collection…</p>
               )}
@@ -291,7 +298,7 @@ export default function Shop() {
                   <button
                     type="button"
                     onClick={() => setQuery('')}
-                    className={`mt-3 text-sm underline underline-offset-4 ${FOCUS_RING}`}
+                    className={`mt-3 min-h-[44px] text-sm underline underline-offset-4 ${FOCUS_RING}`}
                     style={{ color: ABIX.goldLight }}
                   >
                     Clear search
