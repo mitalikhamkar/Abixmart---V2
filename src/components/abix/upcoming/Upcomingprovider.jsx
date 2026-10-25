@@ -11,9 +11,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { useCatalog } from '@/lib/CatalogContext';
-import { UpcomingContext } from '@/lib/upcomingcontext';
-import UpcomingProductView from '@/components/abix/upcoming/UpcomingProductView';
-import PreOrderDialog from '@/components/abix/upcoming/PreOrderDialog';
+import { UpcomingContext } from '@/lib/Upcomingcontext';
+import UpcomingProductView from '@/components/abix/upcoming/Upcomingproductview';
+import PreOrderDialog from '@/components/abix/upcoming/Preorderdialog';
 
 const CLOSED = { view: null, preOrder: null, returnTo: null };
 
