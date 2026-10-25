@@ -1,25 +1,22 @@
 // src/components/abix/MountainToRitual.jsx
 //
 // "From the mountain to your ritual": five stages, each with ONE image, a number,
-// a heading and one short line. Photos change with a rising mask (shared
-// MaskedImageStack); text rises in gently. Previous/next buttons, a path
-// indicator (dots on small screens), swipe and arrow keys. There is no autoplay.
+// a heading and one short line. It plays on its own like a slideshow (about 5.5 s
+// per stage) and loops. Previous/next arrows, the path/dots, swipe and arrow
+// keys let anyone take over; autoplay pauses while hovering or focused, when the
+// section is off-screen, and for 9 s after any manual action. A Pause/Play
+// button is always available, and reduced motion never autoplays.
 //
-// REBUILT: the old component layered a separate Shilajit jar cutout over the
-// stage-5 photo, animated by its own tween that was killed and restarted on
-// every step change, drag and autoplay tick, so it could drift out of sync and
-// appear over the wrong frame. That overlay is gone. Each stage is one image in
-// one layer, and inactive layers are hidden, not just transparent.
-//
-// Mobile: the photo sits above the text in normal page flow. Swiping works, but
-// vertical page scrolling is never trapped (touch-action: pan-y).
-import React, { useCallback, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+// Each stage is one image in one layer (shared MaskedImageStack), inactive layers
+// are hidden, not just transparent. There is no separate jar overlay.
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
+import { useReducedMotion } from 'framer-motion';
 import Eyebrow from '@/components/abix/Eyebrow';
 import LeafShadow from '@/components/abix/home/LeafShadow';
 import MaskedImageStack from '@/components/abix/about/MaskedImageStack';
 import { ABOUT_CSS } from '@/components/abix/about/aboutMotion';
-import { useScrollReveal } from '@/hooks/useScrollReveal';
+import { useInViewReveal } from '@/hooks/useInViewReveal';
 import { storyStages, featuredProduct } from '@/data/products';
 import { FOREST, FOCUS_RING } from '@/components/abix/upcoming/livingCollection/theme';
 import { ABIX } from '@/components/abix/brandColors';
@@ -75,9 +72,11 @@ const STEPS = [
   },
 ];
 const N = STEPS.length;
-const LAST = N - 1;
 const IMAGES = STEPS.map((s) => ({ src: s.image, alt: s.alt }));
 const pad = (n) => String(n).padStart(2, '0');
+
+const AUTOPLAY_MS = 5500;
+const MANUAL_PAUSE_MS = 9000;
 
 // Descent path: nodes (x, y) in a 1000 x 60 box, high on the left to low on the right.
 const NODES = [
@@ -95,23 +94,56 @@ const SEGMENTS = [
 ];
 
 export default function MountainToRitual() {
+  const reduce = useReducedMotion();
   const rootRef = useRef(null);
+  const regionRef = useRef(null);
   const swipeStart = useRef(null);
+  const manualTimer = useRef(0);
+
   const [sel, setSel] = useState({ active: 0, prev: 0 });
-  useScrollReveal(rootRef);
+  const [paused, setPaused] = useState(false); // the visitor pressed Pause
+  const [manual, setManual] = useState(false); // recent manual action
+  const [hold, setHold] = useState(false); // mouse hover / keyboard focus
+  const [visible, setVisible] = useState(true);
+  useInViewReveal(rootRef);
+
+  // Autoplay only while the section is on screen.
+  useEffect(() => {
+    const el = regionRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined;
+    const io = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { threshold: 0.25 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  useEffect(() => () => window.clearTimeout(manualTimer.current), []);
+
+  const touch = useCallback(() => {
+    setManual(true);
+    window.clearTimeout(manualTimer.current);
+    manualTimer.current = window.setTimeout(() => setManual(false), MANUAL_PAUSE_MS);
+  }, []);
+
+  const running = !reduce && !paused && !manual && !hold && visible;
+
+  useEffect(() => {
+    if (!running) return undefined;
+    const id = window.setTimeout(() => {
+      setSel((s) => ({ active: (s.active + 1) % N, prev: s.active }));
+    }, AUTOPLAY_MS);
+    return () => window.clearTimeout(id);
+  }, [running, sel.active]);
 
   const go = useCallback((i) => {
+    touch();
     setSel((s) => {
-      const n = Math.max(0, Math.min(LAST, i));
+      const n = ((i % N) + N) % N;
       return n === s.active ? s : { active: n, prev: s.active };
     });
-  }, []);
+  }, [touch]);
   const step = useCallback((d) => {
-    setSel((s) => {
-      const n = Math.max(0, Math.min(LAST, s.active + d));
-      return n === s.active ? s : { active: n, prev: s.active };
-    });
-  }, []);
+    touch();
+    setSel((s) => ({ active: (s.active + d + N) % N, prev: s.active }));
+  }, [touch]);
 
   const onKeyDown = (e) => {
     if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
@@ -120,7 +152,7 @@ export default function MountainToRitual() {
 
   const { active, prev } = sel;
   const s = STEPS[active];
-  const arrow = `h-12 w-12 rounded-full inline-flex items-center justify-center border transition-colors duration-300 disabled:opacity-30 disabled:pointer-events-none hover:bg-[rgba(199,174,125,0.1)] ${FOCUS_RING}`;
+  const arrow = `h-12 w-12 rounded-full inline-flex items-center justify-center border transition-colors duration-300 hover:bg-[rgba(199,174,125,0.1)] ${FOCUS_RING}`;
 
   return (
     <section
@@ -128,9 +160,7 @@ export default function MountainToRitual() {
       ref={rootRef}
       aria-labelledby="journey-title"
       className="relative overflow-hidden grain"
-      style={{
-        background: `linear-gradient(180deg, ${FOREST.deep} 0%, ${FOREST.mid} 45%, ${FOREST.deepest} 100%)`,
-      }}
+      style={{ background: `linear-gradient(180deg, ${FOREST.deep} 0%, ${FOREST.mid} 45%, ${FOREST.deepest} 100%)` }}
     >
       <style>{ABOUT_CSS}</style>
       <LeafShadow side="left" opacity={0.05} className="inset-x-0 top-0 h-[55%]" />
@@ -153,11 +183,15 @@ export default function MountainToRitual() {
         </div>
 
         <div
+          ref={regionRef}
           role="region"
           aria-roledescription="carousel"
           aria-label="From the mountain to your ritual"
           onKeyDown={onKeyDown}
-          data-reveal
+          onPointerEnter={(e) => { if (e.pointerType === 'mouse') setHold(true); }}
+          onPointerLeave={(e) => { if (e.pointerType === 'mouse') setHold(false); }}
+          onFocus={(e) => { if (e.target.matches && e.target.matches(':focus-visible')) setHold(true); }}
+          onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setHold(false); }}
           className="mt-12 lg:mt-16"
         >
           <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-12 gap-8 lg:gap-14 items-center">
@@ -206,7 +240,7 @@ export default function MountainToRitual() {
 
             {/* one heading and one line per stage */}
             <div className="lg:col-span-5 min-w-0">
-              <div aria-live="polite">
+              <div aria-live={running ? 'off' : 'polite'}>
                 <div key={s.key} className="abix-rise">
                   <p className="font-grotesk text-[11px] uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>
                     {pad(active + 1)} / {pad(N)} · {s.label}
@@ -221,26 +255,24 @@ export default function MountainToRitual() {
               </div>
 
               <div className="mt-8 flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => step(-1)}
-                  disabled={active === 0}
-                  aria-label="Previous stage"
-                  className={arrow}
-                  style={{ borderColor: ABIX.ivory25, color: ABIX.ivory }}
-                >
+                <button type="button" onClick={() => step(-1)} aria-label="Previous stage" className={arrow} style={{ borderColor: ABIX.ivory25, color: ABIX.ivory }}>
                   <ChevronLeft size={18} />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => step(1)}
-                  disabled={active === LAST}
-                  aria-label="Next stage"
-                  className={arrow}
-                  style={{ borderColor: ABIX.gold, color: ABIX.goldLight }}
-                >
+                <button type="button" onClick={() => step(1)} aria-label="Next stage" className={arrow} style={{ borderColor: ABIX.gold, color: ABIX.goldLight }}>
                   <ChevronRight size={18} />
                 </button>
+                {!reduce && (
+                  <button
+                    type="button"
+                    onClick={() => setPaused((p) => !p)}
+                    aria-label={paused ? 'Play slideshow' : 'Pause slideshow'}
+                    aria-pressed={paused}
+                    className={`${arrow} h-10 w-10`}
+                    style={{ borderColor: ABIX.ivory12, color: ABIX.ivory70 }}
+                  >
+                    {paused ? <Play size={14} /> : <Pause size={14} />}
+                  </button>
+                )}
                 {/* small screens: stage dots */}
                 <div className="md:hidden ml-auto flex items-center">
                   {STEPS.map((st, i) => (
@@ -259,6 +291,17 @@ export default function MountainToRitual() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* countdown to the next stage */}
+              <div aria-hidden="true" className="mt-6 relative h-px w-full max-w-md" style={{ background: ABIX.ivory12 }}>
+                {running && (
+                  <span
+                    key={active}
+                    className="abix-gbar absolute inset-0"
+                    style={{ background: ABIX.gold, animationDuration: `${AUTOPLAY_MS}ms` }}
+                  />
+                )}
               </div>
             </div>
           </div>

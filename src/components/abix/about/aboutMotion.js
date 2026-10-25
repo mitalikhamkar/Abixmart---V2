@@ -1,8 +1,13 @@
 // src/components/abix/about/aboutMotion.js
 //
-// Shared CSS for the About page's small motions. Everything here is
-// transform/opacity only, and switches off under prefers-reduced-motion.
+// Shared CSS for the About and Support pages' small motions (plus the in-view
+// reveal styles). Everything is transform/opacity only, and switches off under
+// prefers-reduced-motion.
+import { REVEAL_CSS } from '@/hooks/useInViewReveal';
+
 export const ABOUT_CSS = `
+  ${REVEAL_CSS}
+
   @keyframes abixRise {
     from { opacity: 0; transform: translate3d(0, 14px, 0); }
     to   { opacity: 1; transform: none; }
@@ -20,7 +25,18 @@ export const ABOUT_CSS = `
   }
   .abix-amber { animation: abixAmber 14s ease-in-out infinite alternate; will-change: transform, opacity; }
 
+  @keyframes abixGbar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .abix-gbar { transform-origin: 0 50%; animation-name: abixGbar; animation-timing-function: linear; animation-fill-mode: forwards; }
+
+  @keyframes abixPulse {
+    0%   { transform: scale(1);   opacity: 0.6; }
+    100% { transform: scale(2.1); opacity: 0; }
+  }
+  .abix-pulse { animation: abixPulse 2.2s ease-out infinite; }
+
   @media (prefers-reduced-motion: reduce) {
-    .abix-rise > *, .abix-in, .abix-amber { animation: none !important; }
+    .abix-rise > *, .abix-in, .abix-amber, .abix-pulse { animation: none !important; }
   }
 `;
+
+export const MOTION_CSS = ABOUT_CSS;

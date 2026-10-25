@@ -7,49 +7,90 @@ import logoImg from '@/assets/logo/Abixmart-full.png';
 import { FOREST } from '@/components/abix/upcoming/livingCollection/theme';
 import { ABIX } from '@/components/abix/brandColors';
 
-// True while the transition is covering the screen. Pages mounting at that
-// moment skip their own fade-in, so the new page is fully visible when the
-// veil lifts (a second fade under the veil looked like a flicker).
+/* ───────────────────────── shared transition state ─────────────────────────
+   ritualRunning is true while the cinematic veil is covering the screen. Pages
+   that mount in that window skip their own fade-in, and anything that wants to
+   start an intro animation can wait for the veil to lift via whenPageReady(). */
+export const REVEAL_EVENT = 'abix:page-reveal';
 let ritualRunning = false;
 const setRunning = (v) => {
   ritualRunning = v;
 };
+export const isTransitionActive = () => ritualRunning;
+const announceReveal = () => {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(REVEAL_EVENT));
+};
 
-// Subtle premium page transition — calm fade + gentle rise.
+// Runs cb right away (next frame) when no transition is covering the page,
+// otherwise as soon as the veil starts to lift (with a 3s safety). Returns a cleanup.
+export function whenPageReady(cb) {
+  if (typeof window === 'undefined') return () => {};
+  let done = false;
+  const run = () => {
+    if (done) return;
+    done = true;
+    cb();
+  };
+  if (!ritualRunning) {
+    const id = window.requestAnimationFrame(run);
+    return () => {
+      done = true;
+      window.cancelAnimationFrame(id);
+    };
+  }
+  const t = window.setTimeout(run, 3000);
+  const h = () => run();
+  window.addEventListener(REVEAL_EVENT, h, { once: true });
+  return () => {
+    done = true;
+    window.clearTimeout(t);
+    window.removeEventListener(REVEAL_EVENT, h);
+  };
+}
+
+// Every page's own short entrance (the "lightweight" fade, about 220 ms).
+// Skipped when the cinematic veil is covering the screen.
 export default function PageTransition({ children }) {
   return (
     <motion.div
-      initial={ritualRunning ? false : { opacity: 0, y: 12 }}
+      initial={ritualRunning ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      exit={{ opacity: 0, y: -6 }}
+      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
     >
       {children}
     </motion.div>
   );
 }
 
-/* ─────────────────────────── Botanical passage ───────────────────────────
-   Plays on EVERY page-to-page navigation inside the site (Home, Shop, About,
-   Support, product pages, cart, account…).
+/* ───────────────────────────── Botanical passage ─────────────────────────────
+   One transition system with three behaviours, decided by the link clicked:
 
-   1. A click on an internal link is intercepted. The current page softens under
-      a forest-green veil with a warm amber glow; the ABIXMART emblem and a fine
-      gold line appear; leaves drift down across the screen.
-   2. The route changes the moment the veil is closed (never waiting longer than
-      the route needs), and the veil lifts about a tenth of a second later.
-   3. Back/Forward and programmatic navigation (e.g. after sign-in) get the veil
-      at once, then lift.
+   A. CINEMATIC (destination is Home, Shop, About, Support, How-to-take or a
+      product page): a forest-green veil with an amber glow closes (~0.3 s), the
+      ABIXMART logo and a fine gold line appear, leaves drift down. The route
+      changes the moment the veil is closed; the page is revealed once the
+      sequence has been on screen for ~0.65 s, then the veil lifts (~0.4 s).
+   B. LIGHTWEIGHT (any other internal page: cart, wishlist, account, login…): the
+      current page fades out (~0.1 s), then the new page fades in (~0.22 s).
+   C. NONE: same page, #hash-only or ?query-only links, new-tab clicks,
+      external links, downloads, the admin area, reduced motion, and everything
+      that is not a link click (add-to-cart, search, wishlist, FAQ, forms,
+      carousels, modals). Browser Back/Forward and code-driven navigation are
+      left alone: the page's own 0.22 s entrance handles them.
 
-   Not triggered by: links that only change the #hash or ?query, new-tab clicks
-   (ctrl/cmd/shift), external links, downloads, the admin area, or reduced motion.
-   The overlay stops capturing clicks the moment it starts lifting. A safety timer
-   always clears it, rapid repeated navigation never stacks a second run, and
-   only transform and opacity are animated. */
+   Rapid or duplicate clicks while a transition runs are swallowed (the latest
+   destination wins). If the route never changes, the veil lifts after 0.9 s;
+   a 5 s timer always clears everything. Only transform and opacity animate. */
 
 const norm = (p) => (p.length > 1 ? p.replace(/\/+$/, '') : p) || '/';
 const isSitePath = (p) => !p.startsWith('/admin');
 const isPageChange = (a, b) => norm(a) !== norm(b) && isSitePath(a) && isSitePath(b);
+const MAJOR = new Set(['/', '/shop', '/about', '/support', '/how-to-take-shilajit']);
+const isMajor = (p) => {
+  const n = norm(p);
+  return MAJOR.has(n) || /^\/shop\/[^/]+$/.test(n);
+};
 const prefersReduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isCompact = () => window.matchMedia('(max-width: 767px)').matches;
 
@@ -79,7 +120,7 @@ export function RitualTransition() {
     if (!sheet || !veil || !emblem || !line || leaves.length === 0) return undefined;
 
     const st = {
-      phase: 'idle', // idle | closing | covered | opening
+      phase: 'idle', // idle | closing | covered | opening | light
       covered: false,
       routeReady: false,
       leavesDone: false,
@@ -88,6 +129,11 @@ export function RitualTransition() {
       veilTl: null,
       safety: 0,
       openTimer: 0,
+      navGuard: 0,
+      startedAt: 0,
+      minCover: 650,
+      target: '',
+      mainEl: null,
       prev: window.location.pathname,
     };
 
@@ -99,11 +145,19 @@ export function RitualTransition() {
       gsap.set(leaves, { autoAlpha: 0 });
     };
 
+    const restoreMain = () => {
+      if (st.mainEl) gsap.set(st.mainEl, { clearProps: 'opacity' });
+      st.mainEl = null;
+    };
+
     const reset = () => {
+      const wasRunning = ritualRunning;
       if (st.leafTl) st.leafTl.kill();
       if (st.veilTl) st.veilTl.kill();
       window.clearTimeout(st.safety);
       window.clearTimeout(st.openTimer);
+      window.clearTimeout(st.navGuard);
+      restoreMain();
       st.leafTl = null;
       st.veilTl = null;
       st.phase = 'idle';
@@ -113,6 +167,7 @@ export function RitualTransition() {
       st.veilDone = false;
       setRunning(false);
       hideAll();
+      if (wasRunning) announceReveal();
     };
 
     const finish = () => {
@@ -124,7 +179,8 @@ export function RitualTransition() {
       st.safety = window.setTimeout(reset, 5000);
     };
 
-    // A fresh, randomised drift of leaves every time.
+    // A fresh, randomised drift of leaves every time. They fall for about a
+    // second, so they are clearly visible without becoming a loading delay.
     const startLeaves = (compact) => {
       if (st.leafTl) st.leafTl.kill();
       st.leavesDone = false;
@@ -142,10 +198,10 @@ export function RitualTransition() {
           gsap.set(el, { autoAlpha: 0 });
           return;
         }
-        const size = compact ? 38 + Math.random() * 32 : 56 + Math.random() * 48;
+        const size = compact ? 40 + Math.random() * 34 : 58 + Math.random() * 50;
         const left = ((i + Math.random() * 0.8) / count) * 100;
-        const delay = Math.random() * (compact ? 0.28 : 0.4);
-        const dur = (compact ? 0.85 : 1.0) + Math.random() * 0.45;
+        const delay = Math.random() * (compact ? 0.3 : 0.42);
+        const dur = (compact ? 0.95 : 1.1) + Math.random() * 0.5;
         const sway = (compact ? 16 : 36) + Math.random() * 34;
         const dir = Math.random() < 0.5 ? -1 : 1;
         const spin = dir * (100 + Math.random() * 160);
@@ -158,7 +214,7 @@ export function RitualTransition() {
           rotation: Math.random() * 60 - 30,
           autoAlpha: 0,
         });
-        tl.to(el, { autoAlpha: 0.95, duration: 0.18, ease: 'none' }, delay)
+        tl.to(el, { autoAlpha: 0.95, duration: 0.2, ease: 'none' }, delay)
           .to(el, { y: '120vh', duration: dur, ease: 'none' }, delay)
           .fromTo(
             el,
@@ -177,6 +233,8 @@ export function RitualTransition() {
       st.phase = 'opening';
       st.veilDone = false;
       gsap.set(sheet, { pointerEvents: 'none' }); // the page is usable while it lifts
+      setRunning(false);
+      announceReveal(); // page intros can start now
       const compact = isCompact();
       st.veilTl = gsap
         .timeline({
@@ -185,16 +243,18 @@ export function RitualTransition() {
             finish();
           },
         })
-        .to(emblem, { autoAlpha: 0, y: -6, duration: 0.22, ease: 'power1.in' }, 0)
+        .to(emblem, { autoAlpha: 0, y: -6, duration: 0.24, ease: 'power1.in' }, 0)
         .to(veil, { autoAlpha: 0, duration: compact ? 0.32 : 0.42, ease: 'power1.inOut' }, 0.08);
     };
 
-    // A short beat so the new page can finish mounting while it is still covered.
-    const scheduleOpen = (delay = 80) => {
+    // The page is revealed only once the logo and leaves have been on screen
+    // for the minimum time, never longer than that.
+    const scheduleOpen = () => {
       window.clearTimeout(st.openTimer);
+      const wait = Math.max(60, st.minCover - (performance.now() - st.startedAt));
       st.openTimer = window.setTimeout(() => {
         if (st.phase === 'covered') open();
-      }, delay);
+      }, wait);
     };
 
     const startClose = (to) => {
@@ -202,10 +262,13 @@ export function RitualTransition() {
       st.covered = false;
       st.routeReady = false;
       st.veilDone = false;
+      st.target = to;
+      st.startedAt = performance.now();
+      const compact = isCompact();
+      st.minCover = compact ? 520 : 650;
       arm();
       setRunning(true);
 
-      const compact = isCompact();
       gsap.set(sheet, { autoAlpha: 1, pointerEvents: 'auto' });
       gsap.set(veil, { autoAlpha: 0 });
       gsap.set(emblem, { autoAlpha: 0, y: 10, scale: 0.96 });
@@ -217,41 +280,62 @@ export function RitualTransition() {
           onComplete: () => {
             st.covered = true;
             st.phase = 'covered';
-            if (st.routeReady) scheduleOpen(80); // route already changed (e.g. Back pressed)
-            else navRef.current(to);
+            if (st.routeReady) {
+              scheduleOpen(); // route already changed (e.g. Back pressed meanwhile)
+              return;
+            }
+            navRef.current(st.target);
+            window.clearTimeout(st.navGuard);
+            st.navGuard = window.setTimeout(() => {
+              if (!st.routeReady) {
+                st.routeReady = true;
+                scheduleOpen();
+              }
+            }, 900);
           },
         })
-        .to(veil, { autoAlpha: 1, duration: compact ? 0.26 : 0.34, ease: 'power1.inOut' }, 0.06)
-        .to(emblem, { autoAlpha: 1, y: 0, scale: 1, duration: 0.3, ease: 'power2.out' }, 0.16)
-        .to(line, { scaleX: 1, duration: 0.34, ease: 'power2.inOut' }, 0.2);
+        .to(veil, { autoAlpha: 1, duration: compact ? 0.26 : 0.32, ease: 'power1.inOut' }, 0.05)
+        .to(emblem, { autoAlpha: 1, y: 0, scale: 1, duration: 0.34, ease: 'power2.out' }, 0.14)
+        .to(line, { scaleX: 1, duration: 0.4, ease: 'power2.inOut' }, 0.22);
+    };
+
+    // Lightweight: the current page fades out quickly; the new one fades in on its own.
+    const startLight = (to) => {
+      const main = document.querySelector('main');
+      if (!main) {
+        navRef.current(to);
+        return;
+      }
+      st.phase = 'light';
+      st.mainEl = main;
+      arm();
+      st.veilTl = gsap.timeline({
+        onComplete: () => {
+          navRef.current(to);
+          window.clearTimeout(st.navGuard);
+          st.navGuard = window.setTimeout(reset, 800); // route never changed: restore
+        },
+      });
+      st.veilTl.to(main, { opacity: 0, duration: 0.1, ease: 'power1.out' });
     };
 
     const onRoute = (path) => {
       const prev = st.prev;
       st.prev = path;
-      if (prev === path) return;
+      if (norm(prev) === norm(path)) return;
 
-      if (st.phase !== 'idle') {
-        // Our own navigation arriving, or an interruption while running.
-        st.routeReady = true;
-        if (st.covered && st.phase === 'covered') scheduleOpen(80);
+      if (st.phase === 'light') {
+        reset(); // restores main before the new page paints
         return;
       }
-      if (prefersReduced() || !isPageChange(prev, path)) return;
-
-      // Navigation we did not start (Back/Forward, programmatic): veil at once, then lift.
-      st.phase = 'covered';
-      st.covered = true;
-      st.routeReady = true;
-      st.veilDone = false;
-      arm();
-      setRunning(true);
-      gsap.set(sheet, { autoAlpha: 1, pointerEvents: 'auto' });
-      gsap.set(veil, { autoAlpha: 1 });
-      gsap.set(emblem, { autoAlpha: 1, y: 0, scale: 1 });
-      gsap.set(line, { scaleX: 1 });
-      startLeaves(isCompact());
-      scheduleOpen(420); // the new page's own entrance finishes while hidden
+      if (st.phase !== 'idle') {
+        st.routeReady = true;
+        window.clearTimeout(st.navGuard);
+        if (st.covered && st.phase === 'covered') scheduleOpen();
+        return;
+      }
+      // idle: Back/Forward or code-driven navigation. No overlay; the page's own
+      // short entrance handles it.
     };
 
     const onClick = (e) => {
@@ -266,9 +350,23 @@ export function RitualTransition() {
       }
       if (url.origin !== window.location.origin) return;
       if (!isPageChange(window.location.pathname, url.pathname)) return; // same page, hash, query, admin
-      if (st.phase !== 'idle' || prefersReduced()) return;
+      if (prefersReduced()) return;
+
+      const full = url.pathname + url.search + url.hash;
+      if (st.phase === 'closing') {
+        e.preventDefault();
+        st.target = full; // latest destination wins
+        return;
+      }
+      if (st.phase === 'covered' || st.phase === 'light') {
+        e.preventDefault(); // duplicate click while running
+        return;
+      }
+      if (st.phase === 'opening') return; // the page is already usable: navigate normally
+
       e.preventDefault();
-      startClose(url.pathname + url.search + url.hash);
+      if (isMajor(url.pathname)) startClose(full);
+      else startLight(full);
     };
 
     hideAll();
@@ -304,7 +402,7 @@ export function RitualTransition() {
         }}
       />
 
-      {/* emblem and a fine gold line */}
+      {/* the ABIXMART logo and a fine gold line */}
       <div
         ref={emblemRef}
         className="absolute left-1/2 top-1/2 flex flex-col items-center"

@@ -7,7 +7,7 @@ import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { X } from 'lucide-react';
 import Eyebrow from '@/components/abix/Eyebrow';
-import { useScrollReveal } from '@/hooks/useScrollReveal';
+import { useInViewReveal } from '@/hooks/useInViewReveal';
 import { faqs, featuredProduct, storyStages } from '@/data/products';
 import { FOREST, FOCUS_RING } from '@/components/abix/upcoming/livingCollection/theme';
 import { ABIX } from '@/components/abix/brandColors';
@@ -51,7 +51,7 @@ const NOT_CLAIMED = [
 
 export default function Transparency() {
   const rootRef = useRef(null);
-  useScrollReveal(rootRef);
+  useInViewReveal(rootRef);
 
   return (
     <section

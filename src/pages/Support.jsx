@@ -1,32 +1,24 @@
 // src/pages/Support.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import {
-  ShoppingBag,
-  BookOpen,
-  Package,
-  Truck,
-  HelpCircle,
-  MessageCircle,
-  Check,
-  Send,
-  ArrowRight,
-} from 'lucide-react';
+import { useGSAP } from '@gsap/react';
+import { AlertCircle, Check, Loader2, Mail, MessageCircle, Send } from 'lucide-react';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import PageTransition from '@/components/abix/PageTransition';
+import { gsap } from '@/lib/gsap';
+import PageTransition, { whenPageReady } from '@/components/abix/PageTransition';
 import Eyebrow from '@/components/abix/Eyebrow';
 import FAQAccordion from '@/components/abix/FAQAccordion';
-import {
-  supportOptions,
-  faqs,
-  orderSteps,
-  getProductBySlug,
-  ritualBundles,
-} from '@/data/products';
+import LeafShadow from '@/components/abix/home/LeafShadow';
+import ChapterRail from '@/components/abix/ChapterRail';
+import HelpFinder from '@/components/abix/support/HelpFinder';
+import OrderTimeline from '@/components/abix/support/OrderTimeline';
+import { ABOUT_CSS } from '@/components/abix/about/aboutMotion';
+import { useInViewReveal } from '@/hooks/useInViewReveal';
+import { supportOptions, faqs, orderSteps, getProductBySlug, ritualBundles } from '@/data/products';
 import { useAuth } from '@/lib/AuthContext';
-import { getOrderForTracking, statusToStage, statusToDetailIndex } from '@/lib/orderUtils';
+import { getOrderForTracking, statusToDetailIndex } from '@/lib/orderUtils';
+import { FOREST, FOCUS_RING } from '@/components/abix/upcoming/livingCollection/theme';
 import { ABIX } from '@/components/abix/brandColors';
 
 import supportHero from '@/assets/support/support-hero.png';
@@ -35,77 +27,150 @@ import supportTracking from '@/assets/support/support-tracking.png';
 import supportFaq from '@/assets/support/support-faq.png';
 import supportContact from '@/assets/support/support-contact.png';
 
-const iconMap = {
-  ShoppingBag,
-  BookOpen,
-  Package,
-  Truck,
-  HelpCircle,
-  MessageCircle,
+const WHATSAPP_URL = 'https://wa.me/917680014597';
+const SUPPORT_EMAIL = 'abixmartsupport@gmail.com';
+const ERROR = '#C98473';
+const ORDER_ID_RE = /^ABX-\d{8}-[A-Z0-9]{5}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const CHAPTERS = [
+  { id: 'support-hero', label: 'Welcome' },
+  { id: 'help', label: 'Find your path' },
+  { id: 'tracking', label: 'Track an order' },
+  { id: 'faq', label: 'Questions' },
+  { id: 'inquiry', label: 'Write to us' },
+  { id: 'contact', label: 'Reach us' },
+];
+const HEADLINE = ['How', 'can', 'we', 'help?'];
+
+// One image per help option (5 real assets for 6 options: the hero repeats once,
+// on options that are not next to each other).
+const FINDER_IMAGES = [supportHero, supportHelpCards, supportTracking, supportContact, supportFaq, supportHero].map((src) => ({
+  src,
+  alt: '',
+}));
+
+const EMPTY_FORM = { name: '', email: '', phone: '', productInterest: '', quantity: '', message: '' };
+const FIELD_IDS = {
+  name: 'inq-name',
+  email: 'inq-email',
+  phone: 'inq-phone',
+  productInterest: 'inq-interest',
+  quantity: 'inq-quantity',
+  message: 'inq-message',
 };
 
-// CHANGED: these now alias the centralized ABIX token system instead of
-// hardcoded hex — every usage further down the file is untouched.
-const INK = ABIX.obsidian;
-const GRAPHITE = ABIX.espresso;
-const STONE = ABIX.deep;
-const IVORY = ABIX.ivory;
-const MUTED = ABIX.ivory45;
-const AMBER = ABIX.goldLight;
-const AMBER_FILL = ABIX.gold;
+function validateInquiry(f) {
+  const e = {};
+  if (!f.name.trim()) e.name = 'Please enter your name.';
+  if (!f.email.trim()) e.email = 'Please enter your email address.';
+  else if (!EMAIL_RE.test(f.email.trim())) e.email = "That email address doesn't look right.";
+  const digits = f.phone.replace(/\D/g, '');
+  if (f.phone.trim() && (digits.length < 7 || digits.length > 15)) e.phone = 'Enter a valid phone number, or leave it blank.';
+  if (f.quantity && !(Number(f.quantity) > 0)) e.quantity = 'Quantity must be 1 or more.';
+  if (!f.message.trim()) e.message = 'Please write a short message.';
+  else if (f.message.trim().length < 10) e.message = 'Please add a little more detail (at least 10 characters).';
+  return e;
+}
 
-// The "Choose Your Path" section has 6 cards but only 5 support images
-// exist in the project — there is no dedicated 6th photo. This maps each
-// card to one of the 5 real assets so no two *adjacent* cards repeat the
-// same image. supportHero is reused once (cards 0 and 5, which are not
-// next to each other) since 6 slots > 5 assets. If a unique 6th image is
-// ever added, replace supportHero at the end with the new import.
-const CARD_IMAGES = [
-  supportHero,       // "I want to buy something"
-  supportHelpCards,  // "I want to understand a product"
-  supportTracking,   // "I already placed an order"
-  supportContact,    // "I want to track my order"
-  supportFaq,        // "I have a question"
-  supportHero,       // "Talk to ABIXMART" — reused, non-adjacent to card 0
-];
+const jumpTo = (id) => {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+// A gold line that drops from one chapter into the next.
+function NextStep({ to, children }) {
+  const go = (e) => {
+    const el = document.getElementById(to);
+    if (!el) return;
+    e.preventDefault();
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  return (
+    <div className="mt-14 lg:mt-20 flex justify-center">
+      <a href={`#${to}`} onClick={go} className={`group inline-flex flex-col items-center gap-3 min-h-[44px] ${FOCUS_RING}`}>
+        <span className="text-[11px] font-semibold uppercase tracking-luxe-sm" style={{ color: ABIX.goldLight }}>
+          {children}
+        </span>
+        <span
+          aria-hidden="true"
+          className="block h-10 w-px transition-all duration-500 group-hover:h-14"
+          style={{ background: `linear-gradient(180deg, ${ABIX.gold}, transparent)` }}
+        />
+      </a>
+    </div>
+  );
+}
+
+function Field({ id, label, error, children }) {
+  return (
+    <div>
+      <label htmlFor={id} className="label-meta mb-1.5 block" style={{ color: ABIX.ivory70 }}>
+        {label}
+      </label>
+      {children}
+      {error && (
+        <p id={`${id}-error`} role="alert" className="mt-1.5 flex items-center gap-1.5 text-xs" style={{ color: ERROR }}>
+          <AlertCircle size={12} className="shrink-0" /> {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function Support() {
   const [searchParams] = useSearchParams();
   const { user, profile } = useAuth();
 
+  const rootRef = useRef(null);
+  const heroImgRef = useRef(null);
+
+  const [faqOpen, setFaqOpen] = useState(0);
+
+  // ── order tracking (real lookup, unchanged logic) ─────────────────
   const [orderId, setOrderId] = useState('');
   const [tracked, setTracked] = useState(false);
-  const [hoveredCard, setHoveredCard] = useState(null);
-
-  // CHANGED — real order tracking. `tracked` now just means "a lookup
-  // has run"; the actual result lives in trackedOrder/trackError below,
-  // and the existing 3-stage + detailed step UI reads its progress from
-  // trackedOrder.orderStatus instead of a hardcoded demo stage.
   const [tracking, setTracking] = useState(false);
   const [trackError, setTrackError] = useState('');
+  const [trackKind, setTrackKind] = useState(''); // invalid | login | notfound | error
   const [trackedOrder, setTrackedOrder] = useState(null);
 
-  // Looks up one order by orderId, scoped to the signed-in customer.
-  // Shared by the manual "Track order" submit and by the auto-lookup
-  // that runs when Support is opened from Profile → Orders with
-  // ?orderId=... already in the URL.
+  // Looks up one order by orderId, scoped to the signed-in customer. Shared by the
+  // manual "Track order" submit, the help finder, and the auto-lookup that runs
+  // when Support is opened from Profile → Orders with ?orderId=... in the URL.
   const runTrack = async (idToTrack) => {
-    const trimmed = (idToTrack ?? orderId).trim();
-    if (!trimmed) return;
+    const raw = (idToTrack ?? orderId).trim();
+    setTrackedOrder(null);
 
+    if (!raw) {
+      setTracked(true);
+      setTrackKind('invalid');
+      setTrackError('Enter your order ID to continue.');
+      return;
+    }
+    const id = raw.toUpperCase();
+    setOrderId(id);
+    if (!ORDER_ID_RE.test(id)) {
+      setTracked(true);
+      setTrackKind('invalid');
+      setTrackError("That doesn't look like an order ID. It looks like ABX-20260927-7K4M2.");
+      return;
+    }
     if (!user) {
       setTracked(true);
-      setTrackedOrder(null);
+      setTrackKind('login');
       setTrackError('Please log in to track your order.');
       return;
     }
 
     setTracking(true);
     setTrackError('');
+    setTrackKind('');
     try {
-      const order = await getOrderForTracking(trimmed, user.uid);
+      const order = await getOrderForTracking(id, user.uid);
       if (!order) {
         setTrackedOrder(null);
+        setTrackKind('notfound');
         setTrackError('Order not found.');
       } else {
         setTrackedOrder(order);
@@ -115,6 +180,7 @@ export default function Support() {
       // eslint-disable-next-line no-console
       console.error('[ABIXMART] Order tracking lookup failed:', err?.code, err?.message, err);
       setTrackedOrder(null);
+      setTrackKind('error');
       setTrackError('Something went wrong looking up that order. Please try again.');
       setTracked(true);
     } finally {
@@ -127,25 +193,21 @@ export default function Support() {
     runTrack(orderId);
   };
 
-  // Prefill the order ID input from ?orderId=... (the link Profile →
-  // Orders → "Track Order" sends customers here with).
+  // Prefill the order ID input from ?orderId=... (the link Profile → Orders →
+  // "Track Order" sends customers here with).
   useEffect(() => {
     const qid = searchParams.get('orderId');
     if (!qid) return;
     setOrderId(qid);
-    // The app's <ScrollToTop /> resets scroll position on every route
-    // change, which would otherwise fight the browser's normal
-    // jump-to-#tracking behavior and strand the customer at the top of
-    // the page instead of at the section holding their prefilled ID.
-    // requestAnimationFrame runs this after that reset has settled.
+    // <ScrollToTop /> resets scroll on every route change; run after it settles.
     requestAnimationFrame(() => {
       document.getElementById('tracking')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-run the lookup once we know who's asking. Guarded by a ref so
-  // it only ever fires once per page load, not on every auth refresh.
+  // Auto-run the lookup once we know who's asking. Guarded by a ref so it only
+  // fires once per page load, not on every auth refresh.
   const autoTrackedRef = useRef(false);
   useEffect(() => {
     const qid = searchParams.get('orderId');
@@ -155,64 +217,33 @@ export default function Support() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const topStage = trackedOrder ? statusToStage(trackedOrder.orderStatus) : null;
   const detailIndex = trackedOrder ? statusToDetailIndex(trackedOrder.orderStatus) : null;
 
-  // Inquiry form writes to Firestore `inquiries/{inquiryId}` —
-  // the same collection and schema the admin panel's Inquiries section reads.
-  const [inquiryForm, setInquiryForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    productInterest: '',
-    quantity: '',
-    message: '',
-  });
-
-  // Product context carried in from a product page's "Send Inquiry"
-  // action (ProductDetail.jsx / ProductQuickView.jsx), via
-  // ?product=slug&quantity=n.
-  // Kept separate from the form fields so the submitted inquiry
-  // always records the real productId, even if the customer edits
-  // the product-interest text afterward.
+  // ── inquiry form (writes to Firestore `inquiries`, same schema as before) ──
+  const [inquiryForm, setInquiryForm] = useState(EMPTY_FORM);
+  const [fieldErrors, setFieldErrors] = useState({});
+  // Product context carried in from a product page's "Send Inquiry" action via
+  // ?product=slug&quantity=n. Kept separate so the inquiry always records the real productId.
   const [productContext, setProductContext] = useState(null);
-
   const [inquirySubmitting, setInquirySubmitting] = useState(false);
   const [inquirySubmitted, setInquirySubmitted] = useState(false);
   const [inquiryError, setInquiryError] = useState('');
-  const [focusedField, setFocusedField] = useState(null);
 
   // Prefill from ?product=&quantity= — runs once on mount.
   useEffect(() => {
     const slug = searchParams.get('product');
     const quantityParam = searchParams.get('quantity');
     const ritualParam = searchParams.get('ritual');
-
     if (!slug) return;
-
     const product = getProductBySlug(slug);
-
     if (!product) return;
 
-    const ritual = ritualParam
-      ? ritualBundles.find((b) => b.id === ritualParam)
-      : null;
-
+    const ritual = ritualParam ? ritualBundles.find((b) => b.id === ritualParam) : null;
     const quantity =
-      quantityParam && Number(quantityParam) > 0
-        ? String(Number(quantityParam))
-        : ritual
-        ? String(ritual.jars)
-        : '1';
-
+      quantityParam && Number(quantityParam) > 0 ? String(Number(quantityParam)) : ritual ? String(ritual.jars) : '1';
     const interestLabel = ritual ? `${product.name} — ${ritual.name}` : product.name;
 
-    setProductContext({
-      id: product.id,
-      slug: product.slug,
-      name: product.name,
-    });
-
+    setProductContext({ id: product.id, slug: product.slug, name: product.name });
     setInquiryForm((prev) => ({
       ...prev,
       productInterest: interestLabel,
@@ -221,19 +252,14 @@ export default function Support() {
         ? `I am interested in ${product.name} — ${ritual.name}. Quantity requested: ${quantity}.`
         : `I am interested in ${product.name}. Quantity requested: ${quantity}.`,
     }));
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Prefill contact fields from the authenticated user, once,
-  // without ever overwriting anything the customer has already typed.
+  // Prefill contact fields from the authenticated user, once, without overwriting typed values.
   const authPrefilledRef = useRef(false);
-
   useEffect(() => {
     if (!user || authPrefilledRef.current) return;
-
     authPrefilledRef.current = true;
-
     setInquiryForm((prev) => ({
       ...prev,
       email: prev.email || user.email || '',
@@ -242,70 +268,52 @@ export default function Support() {
     }));
   }, [user, profile]);
 
-  const updateInquiryField = (key) => (e) =>
-    setInquiryForm((prev) => ({
-      ...prev,
-      [key]: e.target.value,
-    }));
+  const updateField = (key) => (e) => {
+    const value = e.target.value;
+    setInquiryForm((prev) => ({ ...prev, [key]: value }));
+    if (fieldErrors[key]) setFieldErrors((prev) => ({ ...prev, [key]: undefined }));
+  };
+  const blurField = (key) => () => {
+    const err = validateInquiry(inquiryForm)[key];
+    setFieldErrors((prev) => ({ ...prev, [key]: err }));
+  };
 
   const handleInquirySubmit = async (e) => {
     e.preventDefault();
-
     if (inquirySubmitting) return;
 
-    if (
-      !inquiryForm.name.trim() ||
-      !inquiryForm.email.trim() ||
-      !inquiryForm.message.trim()
-    ) {
-      setInquiryError('Please fill in your name, email, and message.');
+    const errors = validateInquiry(inquiryForm);
+    setFieldErrors(errors);
+    const firstBad = Object.keys(errors)[0];
+    if (firstBad) {
+      setInquiryError('Please check the highlighted fields.');
+      document.getElementById(FIELD_IDS[firstBad])?.focus();
       return;
     }
 
     setInquiryError('');
     setInquirySubmitting(true);
-
     try {
-      const quantityNumber = inquiryForm.quantity
-        ? Number(inquiryForm.quantity)
-        : null;
-
+      const quantityNumber = inquiryForm.quantity ? Number(inquiryForm.quantity) : null;
       await addDoc(collection(db, 'inquiries'), {
         name: inquiryForm.name.trim(),
         email: inquiryForm.email.trim(),
         phone: inquiryForm.phone.trim(),
         productInterest: inquiryForm.productInterest.trim(),
         productId: productContext?.id || null,
-        quantity:
-          Number.isFinite(quantityNumber) && quantityNumber > 0
-            ? quantityNumber
-            : null,
+        quantity: Number.isFinite(quantityNumber) && quantityNumber > 0 ? quantityNumber : null,
         message: inquiryForm.message.trim(),
         source: productContext ? 'product-inquiry' : 'website',
         status: 'new',
         createdAt: serverTimestamp(),
       });
-
       setInquirySubmitted(true);
-
-      setInquiryForm({
-        name: '',
-        email: '',
-        phone: '',
-        productInterest: '',
-        quantity: '',
-        message: '',
-      });
-
+      setInquiryForm(EMPTY_FORM);
+      setFieldErrors({});
       setProductContext(null);
     } catch (err) {
-      console.error(
-        '[ABIXMART] Inquiry submission failed:',
-        err?.code,
-        err?.message,
-        err
-      );
-
+      // eslint-disable-next-line no-console
+      console.error('[ABIXMART] Inquiry submission failed:', err?.code, err?.message, err);
       setInquiryError(
         'Something went wrong sending your message. Please try again, or reach us on WhatsApp below.'
       );
@@ -314,990 +322,598 @@ export default function Support() {
     }
   };
 
-  const inputClass =
-    'w-full h-14 px-5 bg-transparent border text-ivory placeholder:text-ivory/45 focus:outline-none transition-colors';
+  // ── page motion ──────────────────────────────────────────────────
+  useInViewReveal(rootRef, []);
+
+  // Hero intro: headline words rise out of their masks once the page is revealed.
+  useGSAP(
+    (context, contextSafe) => {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+      const words = context.selector('[data-word]');
+      const fades = context.selector('[data-hero-fade]');
+      gsap.set(words, { yPercent: 115 });
+      gsap.set(fades, { autoAlpha: 0, y: 18 });
+      gsap.set(heroImgRef.current, { scale: 1.12 });
+      return whenPageReady(
+        contextSafe(() => {
+          gsap
+            .timeline({ defaults: { ease: 'power3.out' } })
+            .to(heroImgRef.current, { scale: 1, duration: 2.2, ease: 'power2.out' }, 0)
+            .to(words, { yPercent: 0, duration: 1, stagger: 0.12 }, 0.2)
+            .to(fades, { autoAlpha: 1, y: 0, duration: 0.8, stagger: 0.12 }, 0.8);
+        })
+      );
+    },
+    { scope: rootRef }
+  );
+
+  const askFaq = (i) => {
+    setFaqOpen(i);
+    window.setTimeout(() => {
+      document.getElementById(`faq-item-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 60);
+  };
+  const trackFromFinder = (id) => {
+    setOrderId(id);
+    jumpTo('tracking');
+    runTrack(id);
+  };
+
+  const inputBase =
+    'w-full bg-transparent border text-ivory placeholder:text-ivory/40 focus:outline-none focus:border-[#C7AE7D] transition-colors';
+  const borderFor = (err) => (err ? 'border-[#C98473]' : 'border-[rgba(230,225,213,0.25)]');
+  const btnGold = `inline-flex items-center justify-center gap-2 h-14 px-8 text-[12px] font-semibold tracking-luxe-sm uppercase rounded-full transition-colors duration-300 hover:brightness-110 disabled:opacity-60 ${FOCUS_RING}`;
+  const btnGhost = `inline-flex items-center justify-center gap-2 h-14 px-8 text-[12px] font-semibold tracking-luxe-sm uppercase rounded-full border transition-colors duration-300 hover:bg-[rgba(199,174,125,0.08)] ${FOCUS_RING}`;
+
+  // ── order result area ────────────────────────────────────────────
+  let trackResult;
+  if (tracking) {
+    trackResult = (
+      <div role="status" className="flex items-center gap-3 text-sm" style={{ color: ABIX.ivory70 }}>
+        <Loader2 size={16} className="animate-spin" style={{ color: ABIX.goldLight }} /> Looking up your order…
+      </div>
+    );
+  } else if (tracked && trackError) {
+    trackResult = (
+      <div role="alert" className="border p-6" style={{ borderColor: ABIX.ivory12, background: `${FOREST.deepest}CC` }}>
+        <p className="font-display text-xl" style={{ color: ABIX.ivory }}>{trackError}</p>
+        {trackKind === 'notfound' && (
+          <p className="mt-2 text-sm leading-relaxed" style={{ color: ABIX.ivory70 }}>
+            Check the ID, and make sure you are logged in to the account that placed the order. Your orders are listed in Profile → Orders.
+          </p>
+        )}
+        {trackKind === 'login' && (
+          <Link to="/login" className={`mt-4 inline-flex items-center min-h-[44px] text-sm underline underline-offset-4 ${FOCUS_RING}`} style={{ color: ABIX.goldLight }}>
+            Log in
+          </Link>
+        )}
+        {trackKind === 'error' && (
+          <button
+            type="button"
+            onClick={() => runTrack(orderId)}
+            className={`mt-4 inline-flex items-center min-h-[44px] text-sm underline underline-offset-4 ${FOCUS_RING}`}
+            style={{ color: ABIX.goldLight }}
+          >
+            Try again
+          </button>
+        )}
+      </div>
+    );
+  } else if (tracked && trackedOrder) {
+    trackResult = <OrderTimeline order={trackedOrder} detailIndex={detailIndex} steps={orderSteps} />;
+  } else {
+    trackResult = (
+      <p className="text-sm leading-relaxed max-w-sm" style={{ color: ABIX.ivory45 }}>
+        Once you look up an order, its journey appears here. It reflects your order's real status.
+      </p>
+    );
+  }
 
   return (
     <PageTransition>
-      {/* =========================================================
-          HERO
-      ========================================================== */}
-      <section
-        className="relative min-h-[70vh] flex items-end overflow-hidden"
-        style={{ background: INK }}
-      >
-        <motion.div
-          initial={{ opacity: 0.3, scale: 1.08 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{
-            duration: 2,
-            ease: [0.16, 1, 0.3, 1],
-          }}
-          className="absolute inset-0"
+      <div ref={rootRef}>
+        <style>{ABOUT_CSS}</style>
+        <ChapterRail chapters={CHAPTERS} label="Support page chapters" />
+
+        {/* ============ 01 · HERO ============ */}
+        <section
+          id="support-hero"
+          aria-labelledby="support-title"
+          className="relative min-h-[82svh] flex items-end overflow-hidden grain"
+          style={{ background: ABIX.obsidian }}
         >
-          <img
-            src={supportHero}
-            alt=""
-            className="h-full w-full object-cover object-center"
-          />
-        </motion.div>
-
-        <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/60 to-charcoal/15" />
-
-        <div className="absolute inset-0 bg-gradient-to-r from-charcoal/75 via-charcoal/15 to-transparent" />
-
-        <div className="absolute inset-0 grain opacity-[0.05]" />
-
-        <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10 pb-16 lg:pb-24 pt-32 w-full">
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{
-              duration: 0.9,
-              delay: 0.4,
-              ease: [0.16, 1, 0.3, 1],
-            }}
-            className="max-w-2xl"
-          >
-            <Eyebrow light>ABIXMART Support</Eyebrow>
-
-            <h1
-              className="mt-6 font-display text-5xl sm:text-6xl lg:text-7xl leading-[1] tracking-tight"
-              style={{ color: IVORY }}
-            >
-              How can we help?
-            </h1>
-
-            <p
-              className="mt-6 max-w-xl text-lg leading-relaxed"
-              style={{ color: `${IVORY}B3` }}
-            >
-              We designed this to be simple — for everyone. Choose what you
-              need below, or reach us directly.
-            </p>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* =========================================================
-          CHOOSE YOUR PATH
-      ========================================================== */}
-      <section
-        className="py-16 lg:py-24 border-t"
-        style={{
-          background: GRAPHITE,
-          borderColor: `${IVORY}0D`,
-        }}
-      >
-        <div className="mx-auto max-w-7xl px-6 lg:px-10">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5">
-            {supportOptions.map((o, i) => {
-              const Icon = iconMap[o.icon] || HelpCircle;
-              const isHovered = hoveredCard === o.key;
-
-              return (
-                <motion.div
-                  key={o.key}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{
-                    once: true,
-                    margin: '-60px',
-                  }}
-                  transition={{
-                    duration: 0.5,
-                    delay: (i % 3) * 0.06,
-                  }}
-                  onMouseEnter={() => setHoveredCard(o.key)}
-                  onMouseLeave={() => setHoveredCard(null)}
-                >
-                  <Link
-                    to={o.to}
-                    onFocus={() => setHoveredCard(o.key)}
-                    onBlur={() => setHoveredCard(null)}
-                    className="group relative h-full flex flex-col overflow-hidden border transition-colors duration-500"
-                    style={{
-                      borderColor: isHovered
-                        ? `${AMBER}55`
-                        : `${IVORY}14`,
-                      background: STONE,
-                    }}
-                  >
-<div className="relative h-28 overflow-hidden">
-  <div
-    className="absolute inset-0 transition-transform duration-700"
-    style={{
-      backgroundImage: `url(${CARD_IMAGES[i % CARD_IMAGES.length]})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-      transform: isHovered ? 'scale(1.08)' : 'scale(1)',
-      transitionTimingFunction:
-        'cubic-bezier(0.16,1,0.3,1)',
-    }}
-  />
-
-  <div
-    className="absolute inset-0"
-    style={{
-      background: `${INK}66`,
-    }}
-  />
-</div>
-
-                    <div className="relative flex items-start gap-4 p-6 flex-1">
-                      <span className="relative mt-1 shrink-0">
-                        <span
-                          className="absolute -inset-1.5 rounded-full transition-opacity duration-500"
-                          style={{
-                            background: `${AMBER}30`,
-                            opacity: isHovered ? 1 : 0,
-                          }}
-                        />
-
-                        <span
-                          className="relative h-9 w-9 inline-flex items-center justify-center border transition-colors duration-300"
-                          style={{
-                            borderColor: isHovered
-                              ? AMBER
-                              : `${IVORY}30`,
-                            color: isHovered ? AMBER : IVORY,
-                          }}
-                        >
-                          <Icon size={16} />
-                        </span>
-                      </span>
-
-                      <div className="flex-1 min-w-0">
-                        <h3
-                          className="font-display text-xl leading-tight"
-                          style={{ color: IVORY }}
-                        >
-                          {o.label}
-                        </h3>
-
-                        <p
-                          className="mt-1.5 text-sm leading-relaxed"
-                          style={{ color: MUTED }}
-                        >
-                          {o.desc}
-                        </p>
-
-                        <div
-                          className="mt-4 h-px w-full relative overflow-hidden"
-                          style={{
-                            background: `${IVORY}14`,
-                          }}
-                        >
-                          <span
-                            className="absolute inset-y-0 left-0 transition-all duration-500"
-                            style={{
-                              width: isHovered ? '100%' : '0%',
-                              background: AMBER,
-                              transitionTimingFunction:
-                                'cubic-bezier(0.16,1,0.3,1)',
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <ArrowRight
-                        size={16}
-                        className="shrink-0 mt-1 transition-transform duration-300"
-                        style={{
-                          color: isHovered ? AMBER : MUTED,
-                          transform: isHovered
-                            ? 'translateX(3px)'
-                            : 'translateX(0)',
-                        }}
-                      />
-                    </div>
-                  </Link>
-                </motion.div>
-              );
-            })}
+          <div className="absolute inset-0 overflow-hidden">
+            <img
+              ref={heroImgRef}
+              src={supportHero}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 h-full w-full object-cover object-center"
+              style={{ opacity: 0.55 }}
+            />
           </div>
-        </div>
-      </section>
-
-      {/* =========================================================
-          ORDER TRACKING
-      ========================================================== */}
-      <section
-        id="tracking"
-        className="relative py-16 lg:py-24 border-t scroll-mt-20 overflow-hidden"
-        style={{
-          background: INK,
-          borderColor: `${IVORY}0D`,
-        }}
-      >
-        <div className="absolute inset-0">
-          <img
-            src={supportTracking}
-            alt=""
-            className="h-full w-full object-cover opacity-20"
-          />
-
           <div
-            className="absolute inset-0"
-            style={{
-              background: `linear-gradient(90deg, ${INK} 40%, ${INK}CC 100%)`,
-            }}
+            aria-hidden="true"
+            className="abix-amber absolute -left-[10%] top-[8%] h-[70%] w-[70%] pointer-events-none"
+            style={{ background: `radial-gradient(closest-side, ${ABIX.gold25} 0%, transparent 70%)` }}
           />
-        </div>
+          <LeafShadow side="left" opacity={0.09} />
+          <div
+            aria-hidden="true"
+            className="absolute inset-0"
+            style={{ background: `linear-gradient(0deg, ${ABIX.obsidian} 0%, ${ABIX.obsidian}99 40%, ${ABIX.obsidian}26 100%)` }}
+          />
+          <div
+            aria-hidden="true"
+            className="absolute inset-0"
+            style={{ background: `linear-gradient(90deg, ${ABIX.obsidian}CC 0%, ${ABIX.obsidian}33 55%, transparent 100%)` }}
+          />
 
-        <div className="relative mx-auto max-w-7xl px-6 lg:px-10 grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
-          <div>
-            <Eyebrow light>Order Tracking</Eyebrow>
-
-            <h2
-              className="mt-5 font-display text-4xl sm:text-5xl leading-[1.02] tracking-tight"
-              style={{ color: IVORY }}
-            >
-              Where is my order?
-            </h2>
-
-            <p
-              className="mt-4 leading-relaxed"
-              style={{ color: MUTED }}
-            >
-              Enter your order ID to see its journey.
-            </p>
-
-            <form
-              onSubmit={handleTrack}
-              className="mt-7 flex flex-col sm:flex-row gap-3"
-            >
-              <input
-                value={orderId}
-                onChange={(e) => setOrderId(e.target.value)}
-                placeholder="e.g. ABX-20260927-7K4M2"
-                className={inputClass}
-                style={{
-                  borderColor: `${IVORY}30`,
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = AMBER;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = `${IVORY}30`;
-                }}
-              />
-
-              <button
-                type="submit"
-                disabled={tracking}
-                className="h-14 px-8 text-charcoal text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300 shrink-0 disabled:opacity-60"
-                style={{
-                  background: AMBER_FILL,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = AMBER;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = AMBER_FILL;
-                }}
+          <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10 pt-36 pb-16 lg:pb-24 w-full">
+            <div className="max-w-2xl">
+              <div data-hero-fade><Eyebrow light>ABIXMART Support</Eyebrow></div>
+              <h1
+                id="support-title"
+                className="mt-6 font-display text-5xl sm:text-6xl lg:text-7xl xl:text-8xl leading-[1] tracking-tight"
+                style={{ color: ABIX.ivory }}
               >
-                {tracking ? 'Tracking…' : 'Track order'}
-              </button>
-            </form>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between max-w-md">
-              {/* CHANGED: `active` is now per-stage (i <= topStage) driven
-                  by the real orderStatus, instead of the same boolean for
-                  all three circles — the old version showed full fake
-                  progress the instant anything was tracked. */}
-              {['Order', 'In Transit', 'Delivered'].map((label, i) => {
-                const active = tracked && trackedOrder != null && i <= topStage;
-
-                return (
-                  <React.Fragment key={label}>
-                    <div className="flex flex-col items-center gap-2">
-                      <motion.span
-                        initial={false}
-                        animate={{
-                          scale: active ? 1 : 0.9,
-                          borderColor: active
-                            ? AMBER
-                            : `${IVORY}30`,
-                          color: active ? AMBER : MUTED,
-                        }}
-                        transition={{
-                          duration: 0.5,
-                          delay: active ? i * 0.15 : 0,
-                        }}
-                        className="h-10 w-10 rounded-full border flex items-center justify-center text-xs font-grotesk"
-                      >
-                        {i + 1}
-                      </motion.span>
-
-                      <span
-                        className="text-[10px] uppercase tracking-luxe-sm"
-                        style={{
-                          color: active ? IVORY : MUTED,
-                        }}
-                      >
-                        {label}
-                      </span>
-                    </div>
-
-                    {i < 2 && (
-                      <div
-                        className="flex-1 h-px mx-2 relative overflow-hidden"
-                        style={{
-                          background: `${IVORY}1A`,
-                        }}
-                      >
-                        <motion.span
-                          initial={{ width: '0%' }}
-                          animate={{
-                            width: active ? '100%' : '0%',
-                          }}
-                          transition={{
-                            duration: 0.6,
-                            delay: active ? i * 0.15 + 0.2 : 0,
-                            ease: [0.16, 1, 0.3, 1],
-                          }}
-                          className="absolute inset-y-0 left-0"
-                          style={{
-                            background: AMBER,
-                          }}
-                        />
-                      </div>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </div>
-
-            {/* CHANGED: this whole block now branches on the real lookup
-                result (loading / error / not-found / needs-login / found)
-                instead of a single `tracked` boolean with hardcoded demo
-                data. Visual treatment (borders, spacing, GRAPHITE panel)
-                is unchanged from the original. */}
-            {tracking ? (
-              <p className="mt-10 text-sm" style={{ color: MUTED }}>
-                Looking up your order…
-              </p>
-            ) : trackError ? (
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-10 border p-6"
-                style={{ borderColor: `${IVORY}1A`, background: GRAPHITE }}
-              >
-                <p className="font-display text-xl" style={{ color: IVORY }}>
-                  {trackError}
-                </p>
-                {!user && (
-                  <Link
-                    to="/login"
-                    className="mt-4 inline-flex text-sm underline underline-offset-4"
-                    style={{ color: AMBER }}
-                  >
-                    Log in
-                  </Link>
-                )}
-              </motion.div>
-            ) : tracked && trackedOrder ? (
-              <motion.div
-                initial={{
-                  opacity: 0,
-                  y: 12,
-                }}
-                animate={{
-                  opacity: 1,
-                  y: 0,
-                }}
-                className="mt-10 border p-6"
-                style={{
-                  borderColor: `${IVORY}1A`,
-                  background: GRAPHITE,
-                }}
-              >
-                <div className="flex items-center justify-between mb-5">
-                  <span
-                    className="font-display text-xl"
-                    style={{ color: IVORY }}
-                  >
-                    Order {trackedOrder.orderId}
-                  </span>
-
-                  <span
-                    className="label-meta"
-                    style={{ color: AMBER }}
-                  >
-                    {orderSteps[detailIndex]?.label}
-                  </span>
-                </div>
-
-                {orderSteps.map((s, i) => {
-                  const done = i <= detailIndex;
-
-                  return (
-                    <div
-                      key={s.key}
-                      className="grid grid-cols-[auto_1fr] gap-4"
+                {HEADLINE.map((w, i) => (
+                  <span key={w} className="inline-block overflow-hidden align-bottom pb-[0.14em] -mb-[0.14em] mr-[0.22em]">
+                    <span
+                      data-word
+                      className={`inline-block ${i === HEADLINE.length - 1 ? 'italic' : ''}`}
+                      style={i === HEADLINE.length - 1 ? { color: ABIX.goldLight } : undefined}
                     >
-                      <div className="flex flex-col items-center">
-                        <span
-                          className="h-6 w-6 rounded-full inline-flex items-center justify-center text-[10px]"
-                          style={{
-                            background: done ? AMBER : 'transparent',
-                            color: done ? INK : MUTED,
-                            border: done
-                              ? 'none'
-                              : `1px solid ${IVORY}30`,
-                          }}
-                        >
-                          {done ? <Check size={12} /> : i + 1}
-                        </span>
-
-                        {i < orderSteps.length - 1 && (
-                          <span
-                            className="w-px flex-1 my-1"
-                            style={{
-                              background: done
-                                ? `${AMBER}55`
-                                : `${IVORY}1A`,
-                            }}
-                          />
-                        )}
-                      </div>
-
-                      <div className="pb-5">
-                        <h4
-                          className="font-display text-base"
-                          style={{
-                            color: done ? IVORY : `${IVORY}55`,
-                          }}
-                        >
-                          {s.label}
-                        </h4>
-
-                        <p
-                          className="text-xs"
-                          style={{
-                            color: done ? MUTED : `${MUTED}80`,
-                          }}
-                        >
-                          {s.desc}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </motion.div>
-            ) : (
-              <p
-                className="mt-10 text-sm max-w-sm"
-                style={{ color: MUTED }}
-              >
-                Once your order is placed, its journey will appear here.
+                      {w}
+                    </span>
+                  </span>
+                ))}
+              </h1>
+              <p data-hero-fade className="mt-6 max-w-xl text-lg leading-relaxed" style={{ color: ABIX.ivory70 }}>
+                We designed this to be simple, for everyone. Choose what you need below, or reach us directly.
               </p>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* =========================================================
-          FAQ + TRANSPARENCY
-      ========================================================== */}
-      <section
-        id="faq"
-        className="relative py-16 lg:py-24 border-t scroll-mt-20"
-        style={{
-          background: GRAPHITE,
-          borderColor: `${IVORY}0D`,
-        }}
-      >
-        <div className="mx-auto max-w-7xl px-6 lg:px-10 grid lg:grid-cols-12 gap-12 lg:gap-14">
-          <div className="lg:col-span-4">
-            <Eyebrow light>Questions</Eyebrow>
-
-            <h2
-              className="mt-5 font-display text-4xl sm:text-5xl leading-[1.02] tracking-tight"
-              style={{ color: IVORY }}
-            >
-              Honest answers.
-            </h2>
-
-            <p
-              className="mt-6 leading-relaxed"
-              style={{ color: MUTED }}
-            >
-              If something isn't covered here, the ABIXMART Assist is always
-              one tap away.
-            </p>
-
-            <div className="mt-8 relative overflow-hidden">
-              <img
-                src={supportFaq}
-                alt=""
-                className="h-40 w-full object-cover"
-              />
-
-              <div
-                className="absolute inset-0"
-                style={{
-                  background: `linear-gradient(180deg, transparent, ${INK}F0 75%)`,
-                }}
-              />
-
-              <div className="absolute inset-x-0 bottom-0 p-5">
-                <span
-                  className="label-meta"
-                  style={{ color: AMBER }}
-                >
-                  Disclaimer
-                </span>
-
-                <p
-                  className="mt-2 text-xs leading-relaxed"
-                  style={{ color: `${IVORY}CC` }}
-                >
-                  ABIXMART Shilajit is a traditional wellness product, not a
-                  medicine. Statements have not been evaluated by any medical
-                  authority. Consult a qualified healthcare professional
-                  before use, especially if pregnant, nursing, or managing a
-                  health condition.
-                </p>
-
+              <div data-hero-fade className="mt-9 flex flex-col sm:flex-row gap-3">
                 <a
-                  href="#inquiry"
-                  className="mt-3 inline-flex items-center gap-2 text-[11px] uppercase tracking-luxe-sm transition-colors"
-                  style={{ color: AMBER }}
+                  href="#help"
+                  onClick={(e) => { e.preventDefault(); jumpTo('help'); }}
+                  className={`group ${btnGold}`}
+                  style={{ background: ABIX.gold, color: FOREST.deepest }}
                 >
-                  Send an inquiry
-                  <ArrowRight size={12} />
+                  Choose what you need
+                  <span className="ml-1 transition-transform duration-300 group-hover:translate-y-0.5" aria-hidden="true">↓</span>
+                </a>
+                <a
+                  href="#contact"
+                  onClick={(e) => { e.preventDefault(); jumpTo('contact'); }}
+                  className={btnGhost}
+                  style={{ color: ABIX.goldLight, borderColor: `${ABIX.goldLight}66` }}
+                >
+                  Reach us directly
                 </a>
               </div>
             </div>
           </div>
+        </section>
 
-          <div className="lg:col-span-8">
-            <FAQAccordion items={faqs} />
+        {/* ============ 02 · HELP FINDER ============ */}
+        <section
+          id="help"
+          aria-labelledby="help-title"
+          className="relative overflow-hidden grain scroll-mt-20"
+          style={{ background: `linear-gradient(180deg, ${ABIX.obsidian} 0%, ${FOREST.deep} 14%, ${FOREST.mid} 60%, ${FOREST.deep} 100%)` }}
+        >
+          <LeafShadow side="right" opacity={0.05} className="inset-x-0 top-0 h-[60%]" />
+          <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10 py-20 lg:py-28">
+            <div className="max-w-xl">
+              <div data-reveal><Eyebrow light>01 · Find your path</Eyebrow></div>
+              <h2
+                id="help-title"
+                data-reveal
+                data-reveal-delay="0.08"
+                className="mt-5 font-display text-4xl sm:text-5xl lg:text-6xl leading-[1.03] tracking-tight"
+                style={{ color: ABIX.ivory }}
+              >
+                What do you need?
+              </h2>
+              <p data-reveal data-reveal-delay="0.16" className="mt-5 text-base leading-relaxed" style={{ color: ABIX.ivory70 }}>
+                Pick the one that sounds like you. We'll point you to the right place.
+              </p>
+            </div>
+
+            <div data-reveal className="mt-12 lg:mt-16">
+              <HelpFinder
+                options={supportOptions}
+                images={FINDER_IMAGES}
+                faqs={faqs}
+                onTrack={trackFromFinder}
+                onAskFaq={askFaq}
+                whatsappUrl={WHATSAPP_URL}
+              />
+            </div>
+            <NextStep to="tracking">Already ordered? Track it</NextStep>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* =========================================================
-          INQUIRY
-      ========================================================== */}
-      <section
-        id="inquiry"
-        className="relative py-16 lg:py-24 border-t scroll-mt-20 overflow-hidden"
-        style={{
-          background: INK,
-          borderColor: `${IVORY}0D`,
-        }}
-      >
-        <motion.div
-          className="absolute inset-0 pointer-events-none"
-          animate={{
-            background: focusedField
-              ? `radial-gradient(600px circle at 50% 30%, ${AMBER}14, transparent 60%)`
-              : `radial-gradient(600px circle at 50% 30%, ${AMBER}00, transparent 60%)`,
-          }}
-          transition={{ duration: 0.8 }}
-        />
+        {/* ============ 03 · ORDER TRACKING ============ */}
+        <section
+          id="tracking"
+          aria-labelledby="tracking-title"
+          className="relative overflow-hidden grain scroll-mt-20"
+          style={{ background: `linear-gradient(180deg, ${FOREST.deep} 0%, ${FOREST.deepest} 40%, ${ABIX.obsidian} 100%)` }}
+        >
+          <img
+            src={supportTracking}
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover pointer-events-none"
+            style={{
+              opacity: 0.13,
+              maskImage: 'linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)',
+            }}
+          />
+          <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10 py-20 lg:py-28 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-12 gap-12 lg:gap-16 items-start">
+            <div className="lg:col-span-5 min-w-0">
+              <div data-reveal><Eyebrow light>02 · Order tracking</Eyebrow></div>
+              <h2
+                id="tracking-title"
+                data-reveal
+                data-reveal-delay="0.08"
+                className="mt-5 font-display text-4xl sm:text-5xl leading-[1.02] tracking-tight"
+                style={{ color: ABIX.ivory }}
+              >
+                Where is my order?
+              </h2>
+              <p data-reveal data-reveal-delay="0.16" className="mt-4 leading-relaxed" style={{ color: ABIX.ivory70 }}>
+                Enter your order ID to see its journey.
+              </p>
 
-        <div className="relative mx-auto max-w-3xl px-6 lg:px-10">
-          <Eyebrow light>
-            {productContext ? 'Product Inquiry' : 'Talk to ABIXMART'}
-          </Eyebrow>
+              <form data-reveal data-reveal-delay="0.24" onSubmit={handleTrack} noValidate className="mt-7">
+                <label htmlFor="track-order-id" className="label-meta" style={{ color: ABIX.ivory70 }}>Order ID</label>
+                <div className="mt-2 flex flex-col sm:flex-row gap-3">
+                  <input
+                    id="track-order-id"
+                    value={orderId}
+                    onChange={(e) => setOrderId(e.target.value)}
+                    placeholder="e.g. ABX-20260927-7K4M2"
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-invalid={tracked && trackKind === 'invalid'}
+                    aria-describedby="track-help"
+                    className={`${inputBase} h-14 px-5 ${borderFor(tracked && trackKind === 'invalid')}`}
+                  />
+                  <button
+                    type="submit"
+                    disabled={tracking}
+                    className={`${btnGold} shrink-0`}
+                    style={{ background: ABIX.gold, color: FOREST.deepest }}
+                  >
+                    {tracking ? (<><Loader2 size={15} className="animate-spin" /> Tracking…</>) : 'Track order'}
+                  </button>
+                </div>
+                <p id="track-help" className="mt-2 text-xs" style={{ color: ABIX.ivory45 }}>
+                  You'll find your order ID in Profile → Orders.
+                </p>
+              </form>
+            </div>
 
-          <h2
-            className="mt-5 font-display text-4xl sm:text-5xl leading-[1.02] tracking-tight"
-            style={{ color: IVORY }}
-          >
-            {productContext
-              ? `Ask about ${productContext.name}.`
-              : 'Ask us anything.'}
-          </h2>
+            <div className="lg:col-span-7 min-w-0" aria-live="polite">{trackResult}</div>
+          </div>
+          <div className="relative z-10 pb-20 lg:pb-28 -mt-6"><NextStep to="faq">Still wondering? Read the answers</NextStep></div>
+        </section>
 
-          <p
-            className="mt-4 leading-relaxed"
-            style={{ color: MUTED }}
-          >
-            {productContext
-              ? "We'll follow up on availability, pricing, and next steps directly."
-              : "Have a question about ingredients, sourcing, or an order? Send us a note and we'll get back to you directly."}
-          </p>
+        {/* ============ 04 · FAQ ============ */}
+        <section
+          id="faq"
+          aria-labelledby="faq-title"
+          className="relative overflow-hidden grain scroll-mt-20"
+          style={{ background: `linear-gradient(180deg, ${ABIX.obsidian} 0%, ${FOREST.deep} 18%, ${FOREST.mid} 60%, ${FOREST.deep} 100%)` }}
+        >
+          <LeafShadow side="left" opacity={0.05} className="inset-x-0 top-0 h-[60%]" />
+          <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10 py-20 lg:py-28 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-12 gap-12 lg:gap-14">
+            <div className="lg:col-span-4 min-w-0">
+              <div data-reveal><Eyebrow light>03 · Questions</Eyebrow></div>
+              <h2
+                id="faq-title"
+                data-reveal
+                data-reveal-delay="0.08"
+                className="mt-5 font-display text-4xl sm:text-5xl leading-[1.02] tracking-tight"
+                style={{ color: ABIX.ivory }}
+              >
+                Honest answers.
+              </h2>
+              <p data-reveal data-reveal-delay="0.16" className="mt-6 leading-relaxed" style={{ color: ABIX.ivory70 }}>
+                If something isn't covered here, the ABIXMART Assist is always one tap away.
+              </p>
 
-          {productContext && (
-            <div
-              className="mt-6 flex items-center gap-6 border px-5 py-4"
-              style={{
-                borderColor: `${IVORY}1A`,
-                background: GRAPHITE,
-              }}
-            >
-              <div>
-                <span
-                  className="label-meta block"
-                  style={{ color: MUTED }}
-                >
-                  Product
-                </span>
-
-                <span
-                  className="mt-0.5 block font-display text-lg"
-                  style={{ color: IVORY }}
-                >
-                  {productContext.name}
-                </span>
-              </div>
-
-              <div>
-                <span
-                  className="label-meta block"
-                  style={{ color: MUTED }}
-                >
-                  Quantity
-                </span>
-
-                <span
-                  className="mt-0.5 block font-display text-lg"
-                  style={{ color: IVORY }}
-                >
-                  {inquiryForm.quantity || '1'}
-                </span>
+              <div data-reveal className="mt-8 relative overflow-hidden">
+                <img src={supportFaq} alt="" aria-hidden="true" loading="lazy" className="h-44 w-full object-cover" />
+                <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, ${FOREST.deepest}55, ${FOREST.deepest}F2 75%)` }} />
+                <div className="absolute inset-x-0 bottom-0 p-5">
+                  <span className="label-meta" style={{ color: ABIX.goldLight }}>Disclaimer</span>
+                  <p className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(230,225,213,0.8)' }}>
+                    ABIXMART Shilajit is a traditional wellness product, not a medicine. Statements have not been evaluated by any medical
+                    authority. Consult a qualified healthcare professional before use, especially if pregnant, nursing, or managing a
+                    health condition.
+                  </p>
+                </div>
               </div>
             </div>
-          )}
 
-          {inquirySubmitted ? (
-            <motion.div
-              initial={{
-                opacity: 0,
-                y: 16,
-              }}
-              animate={{
-                opacity: 1,
-                y: 0,
-              }}
-              className="mt-8 border p-7 flex items-start gap-4"
-              style={{
-                borderColor: `${IVORY}1A`,
-                background: GRAPHITE,
-              }}
-            >
-              <span
-                className="h-10 w-10 shrink-0 inline-flex items-center justify-center"
-                style={{
-                  background: AMBER,
-                  color: INK,
-                }}
+            <div data-reveal className="lg:col-span-8 min-w-0">
+              <FAQAccordion items={faqs} openIndex={faqOpen} onOpenChange={setFaqOpen} />
+            </div>
+          </div>
+          <div className="relative z-10 pb-20 lg:pb-28 -mt-6"><NextStep to="inquiry">Not here? Write to us</NextStep></div>
+        </section>
+
+        {/* ============ 05 · INQUIRY ============ */}
+        <section
+          id="inquiry"
+          aria-labelledby="inquiry-title"
+          className="relative overflow-hidden grain scroll-mt-20"
+          style={{ background: `linear-gradient(180deg, ${FOREST.deep} 0%, ${ABIX.obsidian} 25%, ${ABIX.obsidian} 100%)` }}
+        >
+          <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10 py-20 lg:py-28 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-12 gap-12 lg:gap-16">
+            {/* left: ties the form back to the FAQ and forward to contact */}
+            <div className="lg:col-span-4 min-w-0">
+              <div data-reveal><Eyebrow light>{productContext ? '04 · Product inquiry' : '04 · Write to us'}</Eyebrow></div>
+              <h2
+                id="inquiry-title"
+                data-reveal
+                data-reveal-delay="0.08"
+                className="mt-5 font-display text-4xl sm:text-5xl leading-[1.02] tracking-tight"
+                style={{ color: ABIX.ivory }}
               >
-                <Check size={18} />
-              </span>
+                {productContext ? `Ask about ${productContext.name}.` : 'Ask us anything.'}
+              </h2>
+              <p data-reveal data-reveal-delay="0.16" className="mt-4 leading-relaxed" style={{ color: ABIX.ivory70 }}>
+                {productContext
+                  ? "We'll follow up on availability, pricing, and next steps directly."
+                  : 'Have a question about ingredients, sourcing, or an order? Send us a note and we will get back to you directly.'}
+              </p>
 
-              <div>
-                <p
-                  className="font-display text-xl"
-                  style={{ color: IVORY }}
-                >
-                  Thank you — your inquiry is on its way.
-                </p>
-
-                <p
-                  className="mt-1.5 text-sm leading-relaxed"
-                  style={{ color: MUTED }}
-                >
-                  We typically reply within one business day. You can also
-                  reach us on WhatsApp below for a faster response.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() => setInquirySubmitted(false)}
-                  className="mt-4 text-sm underline underline-offset-4 transition-colors"
-                  style={{ color: AMBER }}
-                >
-                  Send another inquiry
-                </button>
-              </div>
-            </motion.div>
-          ) : (
-            <form
-              onSubmit={handleInquirySubmit}
-              className="mt-8 space-y-5"
-              noValidate
-            >
-              {inquiryError && (
-                <div className="border border-red-400/40 bg-red-950/40 text-red-300 text-sm px-4 py-3">
-                  {inquiryError}
+              {productContext && (
+                <div className="mt-6 flex items-center gap-8 border px-5 py-4" style={{ borderColor: ABIX.ivory12, background: `${FOREST.deepest}99` }}>
+                  <div>
+                    <span className="label-meta block" style={{ color: ABIX.ivory45 }}>Product</span>
+                    <span className="mt-0.5 block font-display text-lg" style={{ color: ABIX.ivory }}>{productContext.name}</span>
+                  </div>
+                  <div>
+                    <span className="label-meta block" style={{ color: ABIX.ivory45 }}>Quantity</span>
+                    <span className="mt-0.5 block font-display text-lg" style={{ color: ABIX.ivory }}>{inquiryForm.quantity || '1'}</span>
+                  </div>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label
-                    className="label-meta mb-1.5 block"
-                    style={{ color: MUTED }}
-                  >
-                    Name
-                  </label>
-
-                  <input
-                    value={inquiryForm.name}
-                    onChange={updateInquiryField('name')}
-                    onFocus={() => setFocusedField('name')}
-                    onBlur={() => setFocusedField(null)}
-                    placeholder="Your name"
-                    className={inputClass}
-                    style={{
-                      borderColor:
-                        focusedField === 'name'
-                          ? AMBER
-                          : `${IVORY}30`,
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    className="label-meta mb-1.5 block"
-                    style={{ color: MUTED }}
-                  >
-                    Phone (optional)
-                  </label>
-
-                  <input
-                    value={inquiryForm.phone}
-                    onChange={updateInquiryField('phone')}
-                    onFocus={() => setFocusedField('phone')}
-                    onBlur={() => setFocusedField(null)}
-                    placeholder="10-digit mobile"
-                    className={inputClass}
-                    style={{
-                      borderColor:
-                        focusedField === 'phone'
-                          ? AMBER
-                          : `${IVORY}30`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label
-                  className="label-meta mb-1.5 block"
-                  style={{ color: MUTED }}
+              <div data-reveal className="mt-8 border-t pt-6" style={{ borderColor: ABIX.ivory12 }}>
+                <p className="label-meta" style={{ color: ABIX.gold }}>Before you write</p>
+                <ul className="mt-3">
+                  {faqs.slice(0, 3).map((f, i) => (
+                    <li key={f.q} className="list-none">
+                      <button
+                        type="button"
+                        onClick={() => askFaq(i)}
+                        className={`w-full text-left py-2.5 min-h-[44px] text-sm underline-offset-4 hover:underline ${FOCUS_RING}`}
+                        style={{ color: ABIX.ivory70 }}
+                      >
+                        {f.q}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <a
+                  href="#contact"
+                  onClick={(e) => { e.preventDefault(); jumpTo('contact'); }}
+                  className={`mt-3 inline-flex items-center min-h-[44px] text-[11px] font-semibold uppercase tracking-luxe-sm underline-offset-4 hover:underline ${FOCUS_RING}`}
+                  style={{ color: ABIX.goldLight }}
                 >
-                  Email
-                </label>
+                  Prefer to talk? →
+                </a>
+              </div>
+            </div>
 
-                <input
-                  type="email"
-                  value={inquiryForm.email}
-                  onChange={updateInquiryField('email')}
-                  onFocus={() => setFocusedField('email')}
-                  onBlur={() => setFocusedField(null)}
-                  placeholder="you@example.com"
-                  className={inputClass}
-                  style={{
-                    borderColor:
-                      focusedField === 'email'
-                        ? AMBER
-                        : `${IVORY}30`,
-                  }}
+            {/* right: the form */}
+            <div data-reveal className="lg:col-span-8 min-w-0">
+              <div className="group/form relative">
+                <div
+                  aria-hidden="true"
+                  className="absolute -inset-6 pointer-events-none opacity-0 group-focus-within/form:opacity-100 transition-opacity duration-700"
+                  style={{ background: `radial-gradient(60% 60% at 50% 40%, ${ABIX.gold15}, transparent 70%)` }}
                 />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label
-                    className="label-meta mb-1.5 block"
-                    style={{ color: MUTED }}
+                {inquirySubmitted ? (
+                  <div
+                    role="status"
+                    className="relative border p-7 flex items-start gap-4"
+                    style={{ borderColor: ABIX.ivory12, background: `${FOREST.deepest}CC` }}
                   >
-                    What are you interested in? (optional)
-                  </label>
+                    <span className="h-10 w-10 shrink-0 inline-flex items-center justify-center rounded-full" style={{ background: ABIX.gold, color: FOREST.deepest }}>
+                      <Check size={18} />
+                    </span>
+                    <div>
+                      <p className="font-display text-xl" style={{ color: ABIX.ivory }}>Thank you — your inquiry is on its way.</p>
+                      <p className="mt-1.5 text-sm leading-relaxed" style={{ color: ABIX.ivory70 }}>
+                        We have your message and will follow up with you directly. For a quicker conversation, you can also reach us on WhatsApp below.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setInquirySubmitted(false)}
+                        className={`mt-4 min-h-[44px] text-sm underline underline-offset-4 ${FOCUS_RING}`}
+                        style={{ color: ABIX.goldLight }}
+                      >
+                        Send another inquiry
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleInquirySubmit} className="relative space-y-5" noValidate>
+                    {inquiryError && (
+                      <div role="alert" className="flex items-start gap-2 border text-sm px-4 py-3" style={{ borderColor: `${ERROR}66`, background: 'rgba(201,132,115,0.08)', color: ERROR }}>
+                        <AlertCircle size={16} className="mt-0.5 shrink-0" /> {inquiryError}
+                      </div>
+                    )}
 
-                  <input
-                    value={inquiryForm.productInterest}
-                    onChange={updateInquiryField('productInterest')}
-                    onFocus={() => setFocusedField('productInterest')}
-                    onBlur={() => setFocusedField(null)}
-                    placeholder="e.g. Himalayan Shilajit Resin"
-                    className={inputClass}
-                    style={{
-                      borderColor:
-                        focusedField === 'productInterest'
-                          ? AMBER
-                          : `${IVORY}30`,
-                    }}
-                  />
-                </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                      <Field id={FIELD_IDS.name} label="Name" error={fieldErrors.name}>
+                        <input
+                          id={FIELD_IDS.name}
+                          value={inquiryForm.name}
+                          onChange={updateField('name')}
+                          onBlur={blurField('name')}
+                          autoComplete="name"
+                          placeholder="Your name"
+                          aria-invalid={Boolean(fieldErrors.name)}
+                          aria-describedby={fieldErrors.name ? `${FIELD_IDS.name}-error` : undefined}
+                          className={`${inputBase} h-14 px-5 ${borderFor(fieldErrors.name)}`}
+                        />
+                      </Field>
+                      <Field id={FIELD_IDS.phone} label="Phone (optional)" error={fieldErrors.phone}>
+                        <input
+                          id={FIELD_IDS.phone}
+                          type="tel"
+                          value={inquiryForm.phone}
+                          onChange={updateField('phone')}
+                          onBlur={blurField('phone')}
+                          autoComplete="tel"
+                          placeholder="10-digit mobile"
+                          aria-invalid={Boolean(fieldErrors.phone)}
+                          aria-describedby={fieldErrors.phone ? `${FIELD_IDS.phone}-error` : undefined}
+                          className={`${inputBase} h-14 px-5 ${borderFor(fieldErrors.phone)}`}
+                        />
+                      </Field>
+                    </div>
 
-                <div>
-                  <label
-                    className="label-meta mb-1.5 block"
-                    style={{ color: MUTED }}
-                  >
-                    Quantity (optional)
-                  </label>
+                    <Field id={FIELD_IDS.email} label="Email" error={fieldErrors.email}>
+                      <input
+                        id={FIELD_IDS.email}
+                        type="email"
+                        value={inquiryForm.email}
+                        onChange={updateField('email')}
+                        onBlur={blurField('email')}
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                        aria-invalid={Boolean(fieldErrors.email)}
+                        aria-describedby={fieldErrors.email ? `${FIELD_IDS.email}-error` : undefined}
+                        className={`${inputBase} h-14 px-5 ${borderFor(fieldErrors.email)}`}
+                      />
+                    </Field>
 
-                  <input
-                    type="number"
-                    min="1"
-                    value={inquiryForm.quantity}
-                    onChange={updateInquiryField('quantity')}
-                    onFocus={() => setFocusedField('quantity')}
-                    onBlur={() => setFocusedField(null)}
-                    placeholder="1"
-                    className={inputClass}
-                    style={{
-                      borderColor:
-                        focusedField === 'quantity'
-                          ? AMBER
-                          : `${IVORY}30`,
-                    }}
-                  />
-                </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                      <Field id={FIELD_IDS.productInterest} label="What are you interested in? (optional)" error={fieldErrors.productInterest}>
+                        <input
+                          id={FIELD_IDS.productInterest}
+                          value={inquiryForm.productInterest}
+                          onChange={updateField('productInterest')}
+                          placeholder="e.g. Himalayan Shilajit Resin"
+                          className={`${inputBase} h-14 px-5 ${borderFor(fieldErrors.productInterest)}`}
+                        />
+                      </Field>
+                      <Field id={FIELD_IDS.quantity} label="Quantity (optional)" error={fieldErrors.quantity}>
+                        <input
+                          id={FIELD_IDS.quantity}
+                          type="number"
+                          min="1"
+                          inputMode="numeric"
+                          value={inquiryForm.quantity}
+                          onChange={updateField('quantity')}
+                          onBlur={blurField('quantity')}
+                          placeholder="1"
+                          aria-invalid={Boolean(fieldErrors.quantity)}
+                          aria-describedby={fieldErrors.quantity ? `${FIELD_IDS.quantity}-error` : undefined}
+                          className={`${inputBase} h-14 px-5 ${borderFor(fieldErrors.quantity)}`}
+                        />
+                      </Field>
+                    </div>
+
+                    <Field id={FIELD_IDS.message} label="Message" error={fieldErrors.message}>
+                      <textarea
+                        id={FIELD_IDS.message}
+                        value={inquiryForm.message}
+                        onChange={updateField('message')}
+                        onBlur={blurField('message')}
+                        placeholder="How can we help?"
+                        rows={5}
+                        aria-invalid={Boolean(fieldErrors.message)}
+                        aria-describedby={fieldErrors.message ? `${FIELD_IDS.message}-error` : undefined}
+                        className={`${inputBase} px-5 py-4 resize-none ${borderFor(fieldErrors.message)}`}
+                      />
+                    </Field>
+
+                    <button
+                      type="submit"
+                      disabled={inquirySubmitting}
+                      className={`${btnGold} w-full sm:w-auto`}
+                      style={{ background: ABIX.gold, color: FOREST.deepest }}
+                    >
+                      {inquirySubmitting ? (<><Loader2 size={16} className="animate-spin" /> Sending…</>) : (<><Send size={16} /> Send inquiry</>)}
+                    </button>
+                  </form>
+                )}
               </div>
+            </div>
+          </div>
+          <div className="relative z-10 pb-16 lg:pb-24 -mt-6"><NextStep to="contact">Or reach us directly</NextStep></div>
+        </section>
 
-              <div>
-                <label
-                  className="label-meta mb-1.5 block"
-                  style={{ color: MUTED }}
-                >
-                  Message
-                </label>
-
-                <textarea
-                  value={inquiryForm.message}
-                  onChange={updateInquiryField('message')}
-                  onFocus={() => setFocusedField('message')}
-                  onBlur={() => setFocusedField(null)}
-                  placeholder="How can we help?"
-                  rows={5}
-                  className="w-full px-5 py-4 bg-transparent border resize-none focus:outline-none transition-colors"
-                  style={{
-                    borderColor:
-                      focusedField === 'message'
-                        ? AMBER
-                        : `${IVORY}30`,
-                    color: IVORY,
-                  }}
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={inquirySubmitting}
-                className="h-14 px-8 inline-flex items-center gap-3 text-charcoal text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300 disabled:opacity-50"
-                style={{
-                  background: AMBER_FILL,
-                }}
-                onMouseEnter={(e) => {
-                  if (!inquirySubmitting) {
-                    e.currentTarget.style.background = AMBER;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = AMBER_FILL;
-                }}
-              >
-                <Send size={16} />
-
-                {inquirySubmitting ? 'Sending…' : 'Send Inquiry'}
-              </button>
-            </form>
-          )}
-        </div>
-      </section>
-
-      {/* =========================================================
-          CONTACT
-      ========================================================== */}
-      <section
-        id="contact"
-        className="relative py-16 lg:py-24 border-t scroll-mt-20 overflow-hidden"
-        style={{
-          background: GRAPHITE,
-          borderColor: `${IVORY}0D`,
-        }}
-      >
-        <div className="absolute inset-0">
+        {/* ============ 06 · CONTACT ============ */}
+        <section
+          id="contact"
+          aria-labelledby="contact-title"
+          className="relative overflow-hidden grain scroll-mt-20"
+          style={{ background: `linear-gradient(180deg, ${ABIX.obsidian} 0%, ${FOREST.deepest} 45%, ${ABIX.obsidian} 100%)` }}
+        >
           <img
             src={supportContact}
             alt=""
-            className="h-full w-full object-cover opacity-15"
-          />
-
-          <div
-            className="absolute inset-0"
+            aria-hidden="true"
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover pointer-events-none"
             style={{
-              background: `${GRAPHITE}D9`,
+              opacity: 0.12,
+              maskImage: 'linear-gradient(to bottom, transparent 0%, black 35%, transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 35%, transparent 100%)',
             }}
           />
-        </div>
+          <LeafShadow side="right" opacity={0.06} className="inset-x-0 top-0 h-[70%]" />
 
-        <div className="relative mx-auto max-w-4xl px-6 lg:px-10 text-center">
-          <Eyebrow light className="justify-center">
-            Talk to ABIXMART
-          </Eyebrow>
-
-          <h2
-            className="mt-5 font-display text-4xl sm:text-5xl leading-[1.02] tracking-tight"
-            style={{ color: IVORY }}
-          >
-            We're here, the human way.
-          </h2>
-
-          <p
-            className="mt-5 leading-relaxed max-w-xl mx-auto"
-            style={{ color: MUTED }}
-          >
-            Reach us on WhatsApp for a quick reply, or send us an email. No
-            bots, no runaround.
-          </p>
-
-          <div className="mt-9 flex flex-col sm:flex-row gap-3 justify-center">
-            <a
-              href="https://wa.me/917680014597"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center justify-center h-14 px-8 text-charcoal text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300"
-              style={{
-                background: AMBER_FILL,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = AMBER;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = AMBER_FILL;
-              }}
+          <div className="relative z-10 mx-auto max-w-4xl px-6 lg:px-10 py-20 lg:py-32 text-center">
+            <div data-reveal className="flex justify-center"><Eyebrow light>05 · Talk to ABIXMART</Eyebrow></div>
+            <h2
+              id="contact-title"
+              data-reveal
+              data-reveal-delay="0.08"
+              className="mt-5 font-display text-4xl sm:text-5xl lg:text-6xl leading-[1.02] tracking-tight"
+              style={{ color: ABIX.ivory }}
             >
-              <MessageCircle size={18} className="mr-3" />
-              WhatsApp us
-            </a>
+              We're here,{' '}
+              <span className="italic" style={{ color: ABIX.goldLight }}>the human way.</span>
+            </h2>
+            <p data-reveal data-reveal-delay="0.16" className="mt-5 leading-relaxed max-w-xl mx-auto" style={{ color: ABIX.ivory70 }}>
+              Reach us on WhatsApp for a quick reply, or send us an email. No bots, no runaround.
+            </p>
 
-            <a
-              href="mailto:abixmartsupport@gmail.com"
-              className="inline-flex items-center justify-center h-14 px-8 border text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300"
-              style={{
-                borderColor: IVORY,
-                color: IVORY,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = IVORY;
-                e.currentTarget.style.color = INK;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.color = IVORY;
-              }}
-            >
-              Email abixmartsupport@gmail.com
-            </a>
+            <div data-reveal data-reveal-delay="0.24" className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
+              <a
+                href={WHATSAPP_URL}
+                target="_blank"
+                rel="noreferrer"
+                className={btnGold}
+                style={{ background: ABIX.gold, color: FOREST.deepest }}
+              >
+                <MessageCircle size={18} /> WhatsApp us
+              </a>
+              <a
+                href={`mailto:${SUPPORT_EMAIL}`}
+                className={`${btnGhost} normal-case tracking-normal text-sm sm:text-[13px] break-all sm:break-normal`}
+                style={{ color: ABIX.ivory, borderColor: ABIX.ivory25 }}
+              >
+                <Mail size={17} /> {SUPPORT_EMAIL}
+              </a>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </PageTransition>
   );
 }

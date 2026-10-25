@@ -1,9 +1,9 @@
 // src/pages/About.jsx
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import { gsap } from '@/lib/gsap';
-import PageTransition from '@/components/abix/PageTransition';
+import PageTransition, { whenPageReady } from '@/components/abix/PageTransition';
 import Eyebrow from '@/components/abix/Eyebrow';
 import ComingSoonMarquee from '@/components/abix/ComingSoonMarquee';
 import MountainToRitual from '@/components/abix/MountainToRitual';
@@ -13,7 +13,7 @@ import Principles from '@/components/abix/about/Principles';
 import Transparency from '@/components/abix/about/Transparency';
 import EverydayRitual from '@/components/abix/about/EverydayRitual';
 import { ABOUT_CSS } from '@/components/abix/about/aboutMotion';
-import { useScrollReveal } from '@/hooks/useScrollReveal';
+import { useInViewReveal } from '@/hooks/useInViewReveal';
 import { useCatalog } from '@/lib/CatalogContext';
 import { FOREST, FOCUS_RING } from '@/components/abix/upcoming/livingCollection/theme';
 import { ABIX } from '@/components/abix/brandColors';
@@ -24,6 +24,46 @@ import aboutJourney from '@/assets/about/about-journey.png';
 // Headline, split so each word can rise out of its own mask.
 const HEADLINE = [['Built', 'slowly.'], ['Shown', 'honestly.']];
 
+// A gold stem that grows when the closing section comes into view. Uses an
+// IntersectionObserver (not stored scroll positions), so it is reliable on phones.
+function GrowingStem() {
+  const ref = useRef(null);
+  const [grown, setGrown] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    if (typeof IntersectionObserver === 'undefined' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setGrown(true);
+      return undefined;
+    }
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setGrown(true);
+          io.disconnect();
+        }
+      },
+      { threshold: 0.3 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <svg ref={ref} aria-hidden="true" viewBox="0 0 40 120" className="mx-auto h-24 w-auto" fill="none">
+      <path
+        pathLength="1"
+        d="M20 120 C 20 90, 14 70, 20 44 S 26 14, 20 0"
+        stroke={ABIX.gold}
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeDasharray="1"
+        className="transition-[stroke-dashoffset] duration-[1800ms] ease-out motion-reduce:transition-none"
+        style={{ strokeDashoffset: grown ? 0 : 1 }}
+      />
+    </svg>
+  );
+}
+
 // Story order:
 //   hero → principles → journey → transparency → everyday ritual → closing
 // Section backgrounds hand over to each other (obsidian → forest → obsidian),
@@ -32,29 +72,23 @@ export default function About() {
   const rootRef = useRef(null);
   const heroRef = useRef(null);
   const heroImgRef = useRef(null);
-  const closingRef = useRef(null);
   const { comingSoonProducts, loading } = useCatalog();
   const showGrowing = !loading && comingSoonProducts.length > 0;
 
-  useScrollReveal(rootRef);
+  // Scroll reveals (also for the child sections, which share this root).
+  useInViewReveal(rootRef, [showGrowing]);
 
+  // Hero intro: starts once the page transition has lifted, so it is actually seen.
   useGSAP(
-    (context) => {
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-      // hero: headline words rise out of their masks, then the rest follows
+    (context, contextSafe) => {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
       const words = context.selector('[data-word]');
       const fades = context.selector('[data-hero-fade]');
       gsap.set(words, { yPercent: 115 });
       gsap.set(fades, { autoAlpha: 0, y: 18 });
       gsap.set(heroImgRef.current, { scale: 1.12 });
-      gsap
-        .timeline({ defaults: { ease: 'power3.out' } })
-        .to(heroImgRef.current, { scale: 1, duration: 2.2, ease: 'power2.out' }, 0)
-        .to(words, { yPercent: 0, duration: 1, stagger: 0.12 }, 0.25)
-        .to(fades, { autoAlpha: 1, y: 0, duration: 0.8, stagger: 0.12 }, 0.95);
 
-      // parallax and the closing stem, on large screens only
+      // slow parallax on large screens (the hero starts at the top, so its position is stable)
       if (window.matchMedia('(min-width: 1024px)').matches) {
         gsap.to(heroImgRef.current, {
           yPercent: 10,
@@ -62,15 +96,16 @@ export default function About() {
           scrollTrigger: { trigger: heroRef.current, start: 'top top', end: 'bottom top', scrub: true },
         });
       }
-      const stem = context.selector('[data-stem]')[0];
-      if (stem) {
-        gsap.set(stem, { strokeDasharray: 1, strokeDashoffset: 1 });
-        gsap.to(stem, {
-          strokeDashoffset: 0,
-          ease: 'none',
-          scrollTrigger: { trigger: closingRef.current, start: 'top 75%', end: 'center 60%', scrub: true },
-        });
-      }
+
+      return whenPageReady(
+        contextSafe(() => {
+          gsap
+            .timeline({ defaults: { ease: 'power3.out' } })
+            .to(heroImgRef.current, { scale: 1, duration: 2.2, ease: 'power2.out' }, 0)
+            .to(words, { yPercent: 0, duration: 1, stagger: 0.12 }, 0.2)
+            .to(fades, { autoAlpha: 1, y: 0, duration: 0.8, stagger: 0.12 }, 0.85);
+        })
+      );
     },
     { scope: rootRef }
   );
@@ -175,12 +210,9 @@ export default function About() {
         {/* ============ CLOSING ============ */}
         <section
           id="closing"
-          ref={closingRef}
           aria-labelledby="closing-title"
           className="relative overflow-hidden grain"
-          style={{
-            background: `linear-gradient(180deg, ${FOREST.deep} 0%, ${FOREST.deepest} 55%, ${ABIX.obsidian} 100%)`,
-          }}
+          style={{ background: `linear-gradient(180deg, ${FOREST.deep} 0%, ${FOREST.deepest} 55%, ${ABIX.obsidian} 100%)` }}
         >
           <img
             src={aboutJourney}
@@ -197,16 +229,7 @@ export default function About() {
           <LeafShadow side="left" opacity={0.06} className="inset-x-0 top-0 h-[70%]" />
 
           <div className="relative z-10 mx-auto max-w-3xl px-6 lg:px-10 pt-24 lg:pt-36 text-center">
-            <svg aria-hidden="true" viewBox="0 0 40 120" className="mx-auto h-24 w-auto" fill="none">
-              <path
-                data-stem
-                pathLength="1"
-                d="M20 120 C 20 90, 14 70, 20 44 S 26 14, 20 0"
-                stroke={ABIX.gold}
-                strokeWidth="1.2"
-                strokeLinecap="round"
-              />
-            </svg>
+            <GrowingStem />
             <div data-reveal className="mt-6 flex justify-center"><Eyebrow light>What comes next</Eyebrow></div>
             <h2
               id="closing-title"
@@ -242,7 +265,7 @@ export default function About() {
           </div>
 
           {/* existing pre-order strip, kept as a quiet part of the ending */}
-          {showGrowing && (
+          {showGrowing ? (
             <div className="relative z-10 mt-20 lg:mt-28 pb-20 lg:pb-28">
               <div className="mx-auto max-w-7xl px-6 lg:px-10 mb-8">
                 <div data-reveal className="flex items-center gap-4">
@@ -254,8 +277,9 @@ export default function About() {
               </div>
               <ComingSoonMarquee />
             </div>
+          ) : (
+            <div className="pb-20 lg:pb-28" />
           )}
-          {!showGrowing && <div className="pb-20 lg:pb-28" />}
         </section>
       </div>
     </PageTransition>

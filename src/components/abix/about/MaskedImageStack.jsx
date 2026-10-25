@@ -22,7 +22,7 @@ export default function MaskedImageStack({ images, active, prev = active, classN
         const isPrev = !isActive && i === prev;
         return (
           <div
-            key={img.src}
+                        key={i}
             aria-hidden={!isActive}
             style={{
               position: 'absolute',

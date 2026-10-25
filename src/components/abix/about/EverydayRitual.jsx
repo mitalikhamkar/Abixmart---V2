@@ -7,7 +7,7 @@ import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import Eyebrow from '@/components/abix/Eyebrow';
 import LeafShadow from '@/components/abix/home/LeafShadow';
-import { useScrollReveal } from '@/hooks/useScrollReveal';
+import { useInViewReveal } from '@/hooks/useInViewReveal';
 import { featuredProduct } from '@/data/products';
 import { FOREST, FOCUS_RING } from '@/components/abix/upcoming/livingCollection/theme';
 import { ABIX } from '@/components/abix/brandColors';
@@ -25,7 +25,7 @@ const STEPS = featuredProduct.howToUse.slice(0, 3).map((text, i) => ({
 
 export default function EverydayRitual() {
   const rootRef = useRef(null);
-  useScrollReveal(rootRef);
+  useInViewReveal(rootRef);
 
   return (
     <section

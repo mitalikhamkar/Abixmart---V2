@@ -10,7 +10,7 @@ import Eyebrow from '@/components/abix/Eyebrow';
 import LeafShadow from '@/components/abix/home/LeafShadow';
 import MaskedImageStack from '@/components/abix/about/MaskedImageStack';
 import { ABOUT_CSS } from '@/components/abix/about/aboutMotion';
-import { useScrollReveal } from '@/hooks/useScrollReveal';
+import { useInViewReveal } from '@/hooks/useInViewReveal';
 import { featuredProduct, storyStages, trustPillars, openProductTabs } from '@/data/products';
 import { FOREST, FOCUS_RING } from '@/components/abix/upcoming/livingCollection/theme';
 import { ABIX } from '@/components/abix/brandColors';
@@ -79,7 +79,7 @@ export default function Principles() {
   const rootRef = useRef(null);
   const tabRefs = useRef([]);
   const [sel, setSel] = useState({ active: 0, prev: 0 });
-  useScrollReveal(rootRef);
+  useInViewReveal(rootRef);
 
   const choose = (i) => setSel((s) => (s.active === i ? s : { active: i, prev: s.active }));
 
