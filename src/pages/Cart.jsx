@@ -4,16 +4,23 @@ import { Minus, Plus, ShoppingBag, X } from 'lucide-react';
 import PageTransition from '@/components/abix/PageTransition';
 import Eyebrow from '@/components/abix/Eyebrow';
 import { useShop } from '@/lib/ShopContext';
+import { formatPerJar } from '@/lib/cartPricing';
 import { ABIX } from '@/components/abix/brandColors';
 
 const WARN = '#F3A6A6';
 
 export default function Cart() {
-  const { cart, cartItems, unavailableItems, cartResolving, cartTotal, updateQty, removeFromCart, openCheckout } = useShop();
+  const {
+    cart, cartItems, unavailableItems, cartResolving, cartError, retryCart,
+    cartTotal, updateQty, removeFromCart, openCheckout,
+  } = useShop();
 
   const hasUnavailable = unavailableItems.length > 0;
   const isEmpty = cart.length === 0;
-  const isLoading = cartResolving && !isEmpty;
+  // CHANGED: also true while the saved cart is loading, so a signed-in
+  // customer never sees "Your cart is empty" for a moment before it appears.
+  const isLoading = cartResolving;
+  const loadFailed = cartError === 'load';
 
   return (
     <PageTransition>
@@ -24,7 +31,20 @@ export default function Cart() {
             Your ritual, so far.
           </h1>
 
-          {isLoading ? (
+          {loadFailed ? (
+            <div className="mt-16 text-center">
+              <p className="text-sm" style={{ color: WARN }}>
+                We couldn't load your saved cart right now.
+              </p>
+              <button
+                onClick={retryCart}
+                className="mt-4 inline-flex h-11 px-6 items-center rounded-full text-[11px] font-semibold tracking-luxe-sm uppercase transition-colors"
+                style={{ backgroundColor: ABIX.gold, color: ABIX.obsidian }}
+              >
+                Try again
+              </button>
+            </div>
+          ) : isLoading ? (
             <p className="mt-16 text-center text-sm" style={{ color: ABIX.ivory45 }}>Loading your cart…</p>
           ) : isEmpty ? (
             <div className="mt-16 text-center">
@@ -44,14 +64,21 @@ export default function Cart() {
           ) : (
             <div className="mt-10 grid lg:grid-cols-[1fr_320px] gap-10">
               <div className="space-y-4">
+                {cartError === 'save' && (
+                  <p className="text-sm" style={{ color: WARN }}>
+                    Your latest change hasn't been saved yet. We'll keep trying.{' '}
+                    <button onClick={retryCart} className="underline underline-offset-4">Try now</button>
+                  </p>
+                )}
+
                 {hasUnavailable && (
                   <div className="space-y-3">
                     <p className="text-sm" style={{ color: WARN }}>
                       Some items in your cart are no longer available. Remove them to continue to checkout.
                     </p>
-                    {unavailableItems.map(({ id, variantId, variantLabel, qty, product, reason }) => (
+                    {unavailableItems.map(({ id, jars, product, reason }) => (
                       <div
-                        key={`unavailable:${id}:${variantId || ''}`}
+                        key={`unavailable:${id}`}
                         className="flex items-center gap-4 p-4 border rounded-xl"
                         style={{ borderColor: `${WARN}66`, backgroundColor: `${ABIX.espresso}40` }}
                       >
@@ -60,16 +87,12 @@ export default function Cart() {
                             {product?.name || 'An item in your cart'}
                           </h4>
                           <p className="text-xs" style={{ color: ABIX.ivory45 }}>
-                            {variantLabel ? `${variantLabel} · ` : ''}Qty {qty} ·{' '}
-                            {reason === 'variant-missing'
-                              ? 'this option is no longer offered'
-                              : reason === 'no-price'
-                              ? 'price unavailable'
-                              : 'not available for purchase'}
+                            Qty {jars} ·{' '}
+                            {reason === 'no-price' ? 'price unavailable' : 'not available for purchase'}
                           </p>
                         </div>
                         <button
-                          onClick={() => removeFromCart(id, variantId)}
+                          onClick={() => removeFromCart(id)}
                           className="shrink-0 text-xs underline underline-offset-4"
                           style={{ color: WARN }}
                         >
@@ -80,9 +103,9 @@ export default function Cart() {
                   </div>
                 )}
 
-                {cartItems.map(({ id, variantId, variantLabel, qty, unitPrice, subtotal, product }) => (
+                {cartItems.map(({ id, jars, variantLabel, subtotal, product, maxJars }) => (
                   <div
-                    key={`${id}:${variantId || ''}`}
+                    key={id}
                     className="flex gap-4 p-4 border rounded-xl"
                     style={{ borderColor: ABIX.ivory12, backgroundColor: `${ABIX.espresso}40` }}
                   >
@@ -95,22 +118,35 @@ export default function Cart() {
                       <Link to={`/shop/${product.slug}`}>
                         <h4 className="font-display text-lg leading-tight" style={{ color: ABIX.ivory }}>{product.name}</h4>
                         <p className="text-xs" style={{ color: ABIX.ivory45 }}>{variantLabel || product.subtitle}</p>
-                        <p className="text-xs mt-0.5" style={{ color: ABIX.ivory45 }}>{product.currency}{unitPrice} each</p>
+                        <p className="text-xs mt-0.5" style={{ color: ABIX.ivory45 }}>
+                          {product.currency}{formatPerJar(subtotal, jars)} per jar
+                        </p>
                       </Link>
                       <div className="mt-auto flex items-center justify-between">
                         <div className="inline-flex items-center border rounded-full overflow-hidden" style={{ borderColor: ABIX.ivory25 }}>
-                          <button onClick={() => updateQty(id, qty - 1, variantId)} className="h-9 w-9 inline-flex items-center justify-center transition-colors" style={{ color: ABIX.ivory }}>
+                          <button
+                            onClick={() => updateQty(id, jars - 1)}
+                            aria-label="Decrease quantity"
+                            className="h-9 w-9 inline-flex items-center justify-center transition-colors"
+                            style={{ color: ABIX.ivory }}
+                          >
                             <Minus size={14} />
                           </button>
-                          <span className="w-8 text-center font-price text-base" style={{ color: ABIX.ivory }}>{qty}</span>
-                          <button onClick={() => updateQty(id, qty + 1, variantId)} className="h-9 w-9 inline-flex items-center justify-center transition-colors" style={{ color: ABIX.ivory }}>
+                          <span className="w-8 text-center font-price text-base" style={{ color: ABIX.ivory }}>{jars}</span>
+                          <button
+                            onClick={() => updateQty(id, jars + 1)}
+                            disabled={jars >= maxJars}
+                            aria-label="Increase quantity"
+                            className="h-9 w-9 inline-flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            style={{ color: ABIX.ivory }}
+                          >
                             <Plus size={14} />
                           </button>
                         </div>
                         <span className="font-price text-lg" style={{ color: ABIX.ivory }}>{product.currency}{subtotal}</span>
                       </div>
                     </div>
-                    <button onClick={() => removeFromCart(id, variantId)} aria-label="Remove item" className="self-start transition-colors" style={{ color: ABIX.ivory45 }}>
+                    <button onClick={() => removeFromCart(id)} aria-label="Remove item" className="self-start transition-colors" style={{ color: ABIX.ivory45 }}>
                       <X size={16} />
                     </button>
                   </div>

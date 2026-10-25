@@ -16,12 +16,11 @@
 //   Variants come from the product data (Firestore `products/{id}.variants`),
 //   so nothing here is hardcoded to a product id, a price or a variant id.
 //
-// PENDING DECISION (quantities above the largest bundle)
-//   The pricing rule for more jars than the largest bundle (3 jars today) has
-//   NOT been decided yet. Until it is, the cart never goes above the largest
-//   bundle. This is decided in ONE place: bundleCeiling() below. Changing the
-//   rule later means changing that function (and, for a "mix of bundles" or
-//   "single-jar price x quantity" rule, the final branch of resolveLine()).
+// QUANTITIES ABOVE THE LARGEST BUNDLE
+//   When no variant has exactly that many jars (4 or more today), no bundle is
+//   selected and the line is the product's regular single-jar price x the jar
+//   count (4 jars = 4 x 1099). There is no upper limit. Going back down to a
+//   quantity that has a bundle selects that bundle again.
 
 function finiteOrNull(value) {
   if (value === null || value === undefined || value === '') return null;
@@ -43,15 +42,13 @@ function pricedBundles(product) {
   return out;
 }
 
-// The most jars one cart line may hold. With bundles, that is the largest
-// bundle (PENDING rule above). A product with no bundles is plain
-// "regular price x quantity", which is unambiguous, so it has no ceiling.
-export function bundleCeiling(product) {
-  const bundles = pricedBundles(product);
-  return bundles.length ? Math.max(...bundles.map((b) => b.jars)) : Infinity;
+// Kept so callers have one place to ask "is there a maximum?". There is none:
+// above the largest bundle the regular price is simply multiplied.
+export function bundleCeiling() {
+  return Infinity;
 }
 
-// Whole number of jars, at least 1, at most the ceiling.
+// Whole number of jars, at least 1.
 export function clampJars(product, jars) {
   let n = Math.floor(Number(jars));
   if (!Number.isFinite(n) || n < 1) n = 1;

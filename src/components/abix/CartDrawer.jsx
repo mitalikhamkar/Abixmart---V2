@@ -50,12 +50,11 @@ export default function CartDrawer() {
             ) : (
               <>
                 <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-                  {/* CHANGED: keyed by product+variant, shows the
-                      variant label under the name, and unitPrice/
-                      subtotal come straight from ShopContext's already-
-                      correct computation — never product.price × qty. */}
-                  {cartItems.map(({ id, variantId, variantLabel, qty, unitPrice, subtotal, product }) => (
-                    <div key={`${id}:${variantId || ''}`} className="flex gap-4">
+                  {/* CHANGED: one line per product. `jars` is the quantity shown;
+                      the bundle label, price and subtotal come from ShopContext
+                      (derived from the jar count), never product.price x qty. */}
+                  {cartItems.map(({ id, jars, variantLabel, subtotal, product, maxJars }) => (
+                    <div key={id} className="flex gap-4">
                       <Link to={`/shop/${product.slug}`} onClick={closeCart} className="shrink-0">
                         <div className="h-24 w-20 bg-sand overflow-hidden">
                           {product.shopImage && <img src={product.shopImage} alt={product.name} className="h-full w-full object-cover" />}
@@ -68,18 +67,23 @@ export default function CartDrawer() {
                         </Link>
                         <div className="mt-auto flex items-center justify-between">
                           <div className="inline-flex items-center border border-greendark/20">
-                            <button onClick={() => updateQty(id, qty - 1, variantId)} className="h-9 w-9 inline-flex items-center justify-center text-greendark hover:bg-sand transition-colors">
+                            <button onClick={() => updateQty(id, jars - 1)} aria-label="Decrease quantity" className="h-9 w-9 inline-flex items-center justify-center text-greendark hover:bg-sand transition-colors">
                               <Minus size={14} />
                             </button>
-                            <span className="w-8 text-center font-price text-base text-greendark">{qty}</span>
-                            <button onClick={() => updateQty(id, qty + 1, variantId)} className="h-9 w-9 inline-flex items-center justify-center text-greendark hover:bg-sand transition-colors">
+                            <span className="w-8 text-center font-price text-base text-greendark">{jars}</span>
+                            <button
+                              onClick={() => updateQty(id, jars + 1)}
+                              disabled={jars >= maxJars}
+                              aria-label="Increase quantity"
+                              className="h-9 w-9 inline-flex items-center justify-center text-greendark hover:bg-sand transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
                               <Plus size={14} />
                             </button>
                           </div>
                           <span className="font-price text-lg text-greendark">{product.currency}{subtotal}</span>
                         </div>
                       </div>
-                      <button onClick={() => removeFromCart(id, variantId)} className="text-xs text-foreground/40 hover:text-destructive transition-colors self-start">
+                      <button onClick={() => removeFromCart(id)} className="text-xs text-foreground/40 hover:text-destructive transition-colors self-start">
                         Remove
                       </button>
                     </div>
@@ -92,8 +96,6 @@ export default function CartDrawer() {
                     <span className="font-price text-2xl text-greendark">₹{cartTotal}</span>
                   </div>
 
-                  {/* NEW: View Cart, per the brief — same ShopContext
-                      state, just the standalone /cart page. */}
                   <Link
                     to="/cart"
                     onClick={closeCart}
