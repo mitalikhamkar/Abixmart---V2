@@ -458,7 +458,7 @@ export default function Support() {
                 style={{ color: ABIX.ivory }}
               >
                 {HEADLINE.map((w, i) => (
-                  <span key={w} className="inline-block overflow-hidden align-bottom pb-[0.14em] -mb-[0.14em] mr-[0.22em]">
+                  <span key={w} className="inline-block overflow-hidden align-bottom pb-[0.14em] -mb-[0.14em] pr-[0.15em] mr-[0.07em]">
                     <span
                       data-word
                       className={`inline-block ${i === HEADLINE.length - 1 ? 'italic' : ''}`}
@@ -904,12 +904,18 @@ export default function Support() {
                 <MessageCircle size={18} /> WhatsApp us
               </a>
               <a
-                href={`mailto:${SUPPORT_EMAIL}`}
-                className={`${btnGhost} normal-case tracking-normal text-sm sm:text-[13px] break-all sm:break-normal`}
-                style={{ color: ABIX.ivory, borderColor: ABIX.ivory25 }}
-              >
-                <Mail size={17} /> {SUPPORT_EMAIL}
-              </a>
+  href={`mailto:${SUPPORT_EMAIL}`}
+  className={`${btnGhost} text-[13px] whitespace-nowrap`}
+  style={{
+    color: ABIX.ivory,
+    borderColor: ABIX.ivory25,
+    textTransform: 'none',
+    letterSpacing: '0.01em',
+    fontWeight: 500,
+  }}
+>
+  <Mail size={17} className="shrink-0" /> {SUPPORT_EMAIL}
+</a>
             </div>
           </div>
         </section>

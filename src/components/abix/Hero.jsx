@@ -235,13 +235,28 @@ export default function Hero() {
         ref={contentRef}
         className="relative z-10 mx-auto w-full max-w-2xl px-6 flex-1 flex flex-col items-center justify-center text-center pt-16 pb-20 lg:pt-20 lg:pb-24"
       >
-        <h1 className="font-display leading-[0.98] tracking-tight" style={{ color: ABIX.ivory }}>
-          <span className="block overflow-hidden">
+        <div
+  aria-hidden="true"
+  className="absolute pointer-events-none -z-10"
+  style={{
+    left: '-12%',
+    right: '-12%',
+    top: '4%',
+    bottom: '4%',
+    background:
+      'radial-gradient(closest-side, rgba(9,17,11,0.55) 0%, rgba(9,17,11,0.3) 55%, transparent 100%)',
+  }}
+/>
+        <h1
+  className="font-display leading-[1.06] tracking-tight"
+  style={{ color: ABIX.ivory, textShadow: '0 2px 24px rgba(9,17,11,0.6)' }}
+>
+          <span className="block overflow-hidden px-[0.12em] pb-[0.16em] -mb-[0.16em]">
             <span ref={headlineLine1Ref} className="block text-[clamp(2rem,8.5vw,2.9rem)] lg:text-[5vw] xl:text-[56px]">
               Rooted in nature.
             </span>
           </span>
-          <span className="block overflow-hidden">
+          <span className="block overflow-hidden px-[0.12em] pb-[0.16em] -mb-[0.16em]">
             <span
               ref={headlineLine2Ref}
               className="block text-[clamp(2rem,8.5vw,2.9rem)] lg:text-[5vw] xl:text-[56px] italic"
@@ -255,7 +270,7 @@ export default function Hero() {
         <p
           ref={descriptionRef}
           className="mt-4 lg:mt-6 max-w-md mx-auto text-sm sm:text-base lg:text-lg leading-relaxed font-body"
-          style={{ color: ABIX.ivory70 }}
+         style={{ color: ABIX.ivory70, textShadow: '0 1px 14px rgba(9,17,11,0.75)' }}
         >
           A considered collection of wellness essentials, created to become part of your everyday rhythm.
         </p>
