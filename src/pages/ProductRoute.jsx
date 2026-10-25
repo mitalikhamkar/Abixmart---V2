@@ -7,7 +7,7 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
 import ProductDetail from '@/pages/ProductDetail';
-import UpcomingProductPage from '@/components/abix/upcoming/UpcomingProductpage';
+import UpcomingProductPage from '@/components/abix/upcoming/Upcomingproductpage';
 import { useCatalog } from '@/lib/CatalogContext';
 
 export default function ProductRoute() {
