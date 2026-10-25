@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Bell, Check, X, Heart } from 'lucide-react';
 import { useProductNotify } from '@/hooks/useProductNotify';
 import { useShop } from '@/lib/ShopContext';
-import { useUpcoming } from '@/lib/upcomingContext';
+import { useUpcoming } from '@/lib/Upcomingcontext';
 
 const PENDING_NOTIFY_KEY = 'abixmart_pending_notify';
 

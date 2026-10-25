@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useUpcoming } from '@/lib/upcomingContext';
+import { useUpcoming } from '@/lib/Upcomingcontext';
 import { ABIX } from '@/components/abix/brandColors';
 import Botanical from '@/components/abix/upcoming/livingCollection/Botanicals';
 import { FOCUS_RING, FOREST, isAvailableProduct } from '@/components/abix/upcoming/livingCollection/theme';

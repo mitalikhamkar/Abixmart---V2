@@ -15,7 +15,7 @@ import { Bell, Check } from 'lucide-react';
 import Eyebrow from '@/components/abix/Eyebrow';
 import { ABIX } from '@/components/abix/brandColors';
 import { useProductNotify } from '@/hooks/useProductNotify';
-import { useUpcoming } from '@/lib/upcomingContext';
+import { useUpcoming } from '@/lib/Upcomingcontext';
 
 const PENDING_NOTIFY_KEY = 'abixmart_pending_notify';
 

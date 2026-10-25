@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Bell, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useCatalog } from '@/lib/CatalogContext';
-import { useUpcoming } from '@/lib/upcomingContext';
+import { useUpcoming } from '@/lib/Upcomingcontext';
 import { useProductNotify } from '@/hooks/useProductNotify';
 import { ABIX } from './brandColors';
 
