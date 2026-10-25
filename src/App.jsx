@@ -6,7 +6,7 @@ import PageNotFound from './lib/PageNotFound';
 import ScrollToTop from './components/ScrollToTop';
 import Home from '@/pages/Home';
 import Shop from '@/pages/Shop';
-import ProductRoute from '@/pages/Productroute';
+import ProductRoute from '@/pages/ProductRoute.jsx';
 import HowToTakeShilajit from '@/pages/HowToTakeShilajit';
 import About from '@/pages/About';
 import Support from '@/pages/Support';
