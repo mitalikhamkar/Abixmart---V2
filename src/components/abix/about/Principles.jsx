@@ -132,13 +132,13 @@ export default function Principles() {
           </p>
         </div>
 
-        <div className="mt-12 lg:mt-16 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-12 gap-10 lg:gap-16 items-start">
+        <div className="mt-12 lg:mt-16 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-12 gap-12 lg:gap-x-20 xl:gap-x-24 items-start">
           {/* the four principles */}
           <div className="lg:col-span-5 min-w-0">
             <div
               role="tablist"
               aria-label="The four principles"
-              className="relative grid grid-cols-2 lg:grid-cols-1 gap-3 sm:gap-4 lg:gap-0 lg:pl-10"
+              className="relative grid grid-cols-2 lg:grid-cols-1 gap-3 sm:gap-5 lg:gap-0 lg:pl-10 lg:pr-2"
             >
               {/* desktop rail: faint track + gold progress */}
               <span aria-hidden="true" className="hidden lg:block absolute left-[3px] top-2 bottom-2 w-px" style={{ background: ABIX.ivory12 }} />
@@ -162,25 +162,25 @@ export default function Principles() {
                     onClick={() => choose(i)}
                     onFocus={() => choose(i)}
                     onKeyDown={(e) => onKeyDown(e, i)}
-                    className={`relative block w-full min-w-0 text-left px-4 py-4 sm:px-5 sm:py-5 lg:px-0 lg:py-7 border lg:border-0 lg:border-b transition-colors duration-300 ${FOCUS_RING}`}
+                    className={`relative block w-full min-w-0 text-left px-4 py-5 sm:px-6 sm:py-6 lg:px-0 lg:py-9 border lg:border-0 lg:border-b transition-colors duration-300 ${FOCUS_RING}`}
                     style={{ borderColor: on ? ABIX.gold : ABIX.ivory25 }}
                   >
                     <span
                       aria-hidden="true"
-                      className="hidden lg:block absolute -left-10 top-[33px] h-[7px] w-[7px] rounded-full transition-all duration-500"
+                      className="hidden lg:block absolute -left-10 top-[41px] h-[7px] w-[7px] rounded-full transition-all duration-500"
                       style={{ background: on ? ABIX.gold : ABIX.ivory25, transform: on ? 'scale(1.5)' : 'scale(1)' }}
                     />
-                    <span className="block font-grotesk text-[10px] tracking-luxe-sm" style={{ color: ABIX.gold }}>
+                    <span className="block font-grotesk text-[10px] tracking-luxe-sm leading-none" style={{ color: ABIX.gold }}>
                       {item.number}
                     </span>
                     <span
-                      className="mt-1 block font-display text-2xl sm:text-3xl lg:text-4xl leading-tight transition-colors duration-500"
+                      className="mt-2 block font-display text-2xl sm:text-3xl lg:text-4xl leading-[1.1] transition-colors duration-500"
                       style={{ color: on ? ABIX.ivory : ABIX.ivory45 }}
                     >
                       {item.label}
                     </span>
                     <span
-                      className="hidden sm:block mt-2 text-[13px] lg:text-sm leading-snug transition-colors duration-500"
+                      className="hidden sm:block mt-3 lg:mt-4 max-w-[28ch] lg:max-w-[34ch] text-[13px] lg:text-sm leading-relaxed transition-colors duration-500"
                       style={{ color: on ? ABIX.ivory70 : ABIX.ivory45 }}
                     >
                       {item.title}
