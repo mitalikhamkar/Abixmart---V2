@@ -933,10 +933,11 @@ export default function Account() {
                   <motion.p {...fadeUp(0.25)} className="text-sm text-ivory/55">
                     {greeting}
                   </motion.p>
+                  {/* Full name: every word in the same gold. The last word stays italic. */}
                   <h1
                     aria-label={fullName}
                     className="mt-1 font-display text-4xl sm:text-5xl lg:text-6xl leading-[1.02] tracking-tight"
-                    style={{ color: ABIX.ivory }}
+                    style={{ color: ABIX.goldLight }}
                   >
                     {nameParts.map((w, i) => {
                       const isLast = nameParts.length > 1 && i === nameParts.length - 1;
@@ -948,7 +949,7 @@ export default function Account() {
                         >
                           <motion.span
                             className={`inline-block ${isLast ? 'italic' : ''}`}
-                            style={isLast ? { color: ABIX.goldLight } : undefined}
+                            style={{ color: ABIX.goldLight }}
                             initial={reduce ? false : { y: '115%' }}
                             animate={{ y: 0 }}
                             transition={{ duration: 0.9, ease: EASE, delay: 0.35 + i * 0.12 }}

@@ -4,6 +4,11 @@
 // focusing (keyboard) a principle updates its photo and its short explanation
 // together. Nothing ever changes automatically while the visitor is reading.
 // Arrow keys / Home / End move between the principles.
+//
+// Layout of the selector:
+//   mobile  (< sm)  : 2x2 compact cards (number + label)
+//   tablet  (sm-lg) : 2x2 cards (number + label + short line)
+//   desktop (lg+)   : one vertical list with a progress line and dots
 import React, { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Eyebrow from '@/components/abix/Eyebrow';
@@ -127,14 +132,15 @@ export default function Principles() {
           </p>
         </div>
 
-        <div className="mt-12 lg:mt-16 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-12 gap-8 lg:gap-16 items-start">
+        <div className="mt-12 lg:mt-16 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-12 gap-10 lg:gap-16 items-start">
           {/* the four principles */}
           <div className="lg:col-span-5 min-w-0">
             <div
               role="tablist"
               aria-label="The four principles"
-              className="relative grid grid-cols-2 gap-2 lg:block lg:pl-9"
+              className="relative grid grid-cols-2 lg:grid-cols-1 gap-3 sm:gap-4 lg:gap-0 lg:pl-10"
             >
+              {/* desktop rail: faint track + gold progress */}
               <span aria-hidden="true" className="hidden lg:block absolute left-[3px] top-2 bottom-2 w-px" style={{ background: ABIX.ivory12 }} />
               <span
                 aria-hidden="true"
@@ -156,24 +162,27 @@ export default function Principles() {
                     onClick={() => choose(i)}
                     onFocus={() => choose(i)}
                     onKeyDown={(e) => onKeyDown(e, i)}
-                    className={`relative text-left px-4 py-3 lg:px-0 lg:py-6 border lg:border-0 lg:border-b transition-colors duration-300 ${FOCUS_RING}`}
+                    className={`relative block w-full min-w-0 text-left px-4 py-4 sm:px-5 sm:py-5 lg:px-0 lg:py-7 border lg:border-0 lg:border-b transition-colors duration-300 ${FOCUS_RING}`}
                     style={{ borderColor: on ? ABIX.gold : ABIX.ivory25 }}
                   >
                     <span
                       aria-hidden="true"
-                      className="hidden lg:block absolute -left-9 top-[36px] h-[7px] w-[7px] rounded-full transition-all duration-500"
+                      className="hidden lg:block absolute -left-10 top-[33px] h-[7px] w-[7px] rounded-full transition-all duration-500"
                       style={{ background: on ? ABIX.gold : ABIX.ivory25, transform: on ? 'scale(1.5)' : 'scale(1)' }}
                     />
                     <span className="block font-grotesk text-[10px] tracking-luxe-sm" style={{ color: ABIX.gold }}>
                       {item.number}
                     </span>
                     <span
-                      className="block font-display text-2xl lg:text-4xl leading-tight transition-colors duration-500"
+                      className="mt-1 block font-display text-2xl sm:text-3xl lg:text-4xl leading-tight transition-colors duration-500"
                       style={{ color: on ? ABIX.ivory : ABIX.ivory45 }}
                     >
                       {item.label}
                     </span>
-                    <span className="hidden lg:block mt-1 text-sm transition-colors duration-500" style={{ color: on ? ABIX.ivory70 : ABIX.ivory25 }}>
+                    <span
+                      className="hidden sm:block mt-2 text-[13px] lg:text-sm leading-snug transition-colors duration-500"
+                      style={{ color: on ? ABIX.ivory70 : ABIX.ivory45 }}
+                    >
                       {item.title}
                     </span>
                   </button>
@@ -221,7 +230,7 @@ export default function Principles() {
                 <p className="mt-3 max-w-lg text-base leading-relaxed" style={{ color: ABIX.ivory70 }}>
                   {p.body}
                 </p>
-                <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3">
+                <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
                   <span
                     className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11px] font-semibold uppercase tracking-luxe-sm"
                     style={{ borderColor: ABIX.gold25, color: ABIX.goldLight }}

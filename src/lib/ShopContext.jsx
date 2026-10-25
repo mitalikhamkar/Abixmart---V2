@@ -1,40 +1,42 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+  useEffect,
+  useSyncExternalStore,
+} from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/AuthContext';
 import { useCatalog } from '@/lib/CatalogContext';
+import { createCartStore, createGuestStorage } from '@/lib/cartStore';
+import { cartRemote } from '@/lib/cartRemote';
+import { bundleCeiling, clampJars, resolveLine } from '@/lib/cartPricing';
 
 const ShopContext = createContext(null);
-
-// A cart line is uniquely identified by product id + variant id
-// (null variant = "the plain product").
-function cartKey(item) {
-  return `${item.id}:${item.variantId || ''}`;
-}
-
-function mergeCartItems(localItems, remoteItems) {
-  const map = new Map();
-  const upsert = (item) => {
-    const key = cartKey(item);
-    if (map.has(key)) {
-      map.set(key, { ...map.get(key), qty: map.get(key).qty + item.qty });
-    } else {
-      map.set(key, { ...item });
-    }
-  };
-  localItems.forEach(upsert);
-  remoteItems.forEach(upsert);
-  return Array.from(map.values());
-}
 
 function mergeWishlistIds(localIds, remoteIds) {
   return Array.from(new Set([...localIds, ...remoteIds]));
 }
 
+// localStorage can throw just by being touched (blocked storage); the guest
+// cart then falls back to memory.
+function safeLocalStorage() {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
 export function ShopProvider({ children }) {
   const { user, loading: authLoading } = useAuth();
+  const { getProductById: productById, loading: catalogLoading } = useCatalog();
+  const uid = user?.uid ?? null;
 
-  const [cart, setCart] = useState([]); // [{ id, qty, variantId, variantLabel, unitPrice }]
   const [wishlist, setWishlist] = useState([]);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutPrefill, setCheckoutPrefill] = useState(null);
@@ -43,15 +45,73 @@ export function ShopProvider({ children }) {
   const [cartOpen, setCartOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  const hydratedUidRef = useRef(null);
-  const skipNextCartSaveRef = useRef(false);
-  const skipNextWishlistSaveRef = useRef(false);
+  /* ───────────────────────── cart ─────────────────────────
+     Source of truth: Firestore carts/{uid} for signed-in users, localStorage
+     for guests. All loading / saving / merging lives in src/lib/cartStore.js;
+     this component only connects it to React and to the product catalog. */
 
-  const { getProductById: productById, loading: catalogLoading } = useCatalog();
+  const storeRef = useRef(null);
+  if (!storeRef.current) {
+    storeRef.current = createCartStore({
+      remote: cartRemote,
+      guest: createGuestStorage(safeLocalStorage()),
+    });
+  }
+  const store = storeRef.current;
+  const cartSnap = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 
-  // G4: only `available` products with an existing variant can be added.
-  // The price and label are taken from the catalog, never from the caller.
-  // Returns true when the line was added, false when it was refused.
+  // Always the latest catalog, without making the helpers below change.
+  const catalogRef = useRef(productById);
+  catalogRef.current = productById;
+
+  const storeHelpers = useMemo(
+    () => ({
+      // Hold a stored quantity at what the product allows.
+      clamp: (id, jars) => {
+        const product = catalogRef.current(id);
+        return product ? clampJars(product, jars) : Math.max(1, Math.floor(Number(jars)) || 1);
+      },
+      // Older saved carts counted PACKAGES (qty) of a variant; convert to jars.
+      legacyJars: (item) => {
+        const product = catalogRef.current(item.id);
+        const packs = Math.max(1, Math.floor(Number(item.qty)) || 1);
+        const variant = item.variantId
+          ? (product?.variants || []).find((v) => v.id === item.variantId)
+          : null;
+        const perPack = variant && Number(variant.jars) >= 1 ? Number(variant.jars) : 1;
+        return packs * perPack;
+      },
+    }),
+    []
+  );
+
+  // Connect the cart to the signed-in user (or the guest) once auth and the
+  // catalog are both ready. Calling attach() again for the same user is a no-op.
+  useEffect(() => {
+    if (authLoading || catalogLoading) return;
+    store.attach(uid, storeHelpers);
+  }, [authLoading, catalogLoading, uid, store, storeHelpers]);
+
+  // A tab that was in the background re-reads its saved cart when it comes
+  // back, and unsaved changes are retried when the connection returns.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      store.retry();
+      store.refresh();
+    };
+    const onOnline = () => store.retry();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onOnline);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [store]);
+
+  // Adds jars to the cart. `qty` is a number of jars. For older callers that
+  // pass a variant, `qty` is a number of that variant's packages (as before).
+  // Returns true when the product can be bought, false when it was refused.
   const addToCart = useCallback(
     (id, qty = 1, variant = null) => {
       const product = productById(id);
@@ -61,51 +121,47 @@ export function ShopProvider({ children }) {
         return false;
       }
 
-      const variantId = variant?.id ?? null;
-      let variantLabel = null;
-      let unitPrice = null;
-      if (variantId) {
-        const v = (product.variants || []).find((x) => x.id === variantId);
+      let jars = Math.max(1, Math.floor(Number(qty)) || 1);
+      if (variant?.id) {
+        const v = (product.variants || []).find((x) => x.id === variant.id);
         if (!v) {
           // eslint-disable-next-line no-console
-          console.warn('[ABIXMART] Refused to add an unknown variant:', id, variantId);
+          console.warn('[ABIXMART] Refused to add an unknown variant:', id, variant.id);
           return false;
         }
-        variantLabel = v.name;
-        unitPrice = v.price;
+        jars *= Number(v.jars) >= 1 ? Number(v.jars) : 1;
       }
 
-      const addQty = Math.max(1, Math.floor(Number(qty) || 1));
-      const key = `${id}:${variantId || ''}`;
-
-      setCart((prev) => {
-        const existingIndex = prev.findIndex((c) => cartKey(c) === key);
-        if (existingIndex >= 0) {
-          const updated = [...prev];
-          updated[existingIndex] = { ...updated[existingIndex], qty: updated[existingIndex].qty + addQty };
-          return updated;
-        }
-        return [...prev, { id, qty: addQty, variantId, variantLabel, unitPrice }];
-      });
+      store.add(id, jars, bundleCeiling(product));
       return true;
     },
-    [productById]
+    [productById, store]
   );
 
-  const removeFromCart = useCallback((id, variantId = null) => {
-    setCart((prev) => prev.filter((c) => !(c.id === id && (c.variantId || null) === (variantId || null))));
-  }, []);
+  const removeFromCart = useCallback((id) => store.remove(id), [store]);
 
-  const updateQty = useCallback((id, qty, variantId = null) => {
-    if (qty < 1) return removeFromCart(id, variantId);
-    setCart((prev) =>
-      prev.map((c) => ((c.id === id && (c.variantId || null) === (variantId || null)) ? { ...c, qty } : c))
-    );
-  }, [removeFromCart]);
+  // `qty` is the number of jars. The third argument (old variantId) is ignored:
+  // the variant is always derived from the jar count.
+  const updateQty = useCallback(
+    (id, qty) => {
+      const n = Math.floor(Number(qty));
+      if (!Number.isFinite(n) || n < 1) {
+        store.remove(id);
+        return;
+      }
+      const product = productById(id);
+      store.setJars(id, n, product ? bundleCeiling(product) : Infinity);
+    },
+    [productById, store]
+  );
 
-  const clearCart = useCallback(() => {
-    setCart([]);
-  }, []);
+  const clearCart = useCallback(() => store.clear(), [store]);
+  const retryCart = useCallback(() => store.retry(), [store]);
+
+  /* ───────────────────────── wishlist (unchanged) ───────────────────────── */
+
+  const wishHydratedUidRef = useRef(null);
+  const skipNextWishlistSaveRef = useRef(false);
 
   const toggleWishlist = useCallback((id) => {
     setWishlist((prev) => (prev.includes(id) ? prev.filter((w) => w !== id) : [...prev, id]));
@@ -136,41 +192,21 @@ export function ShopProvider({ children }) {
     if (authLoading) return;
 
     if (!user) {
-      if (hydratedUidRef.current) {
-        hydratedUidRef.current = null;
-        setCart([]);
+      if (wishHydratedUidRef.current) {
+        wishHydratedUidRef.current = null;
         setWishlist([]);
       }
       return;
     }
 
-    if (hydratedUidRef.current === user.uid) return;
+    if (wishHydratedUidRef.current === user.uid) return;
 
     let cancelled = false;
 
     (async () => {
-      let mergedCart = [];
       let mergedWishlist = [];
 
-      skipNextCartSaveRef.current = true;
       skipNextWishlistSaveRef.current = true;
-
-      try {
-        const cartSnap = await getDoc(doc(db, 'carts', user.uid));
-        const remoteItems = cartSnap.exists() ? cartSnap.data().items || [] : [];
-        if (cancelled) return;
-        setCart((prevLocalCart) => {
-          mergedCart = mergeCartItems(prevLocalCart, remoteItems);
-          return mergedCart;
-        });
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[ABIXMART] Failed to load cart from Firestore', err?.code, err?.message);
-        setCart((prevLocalCart) => {
-          mergedCart = prevLocalCart;
-          return prevLocalCart;
-        });
-      }
 
       try {
         const wishSnap = await getDoc(doc(db, 'wishlists', user.uid));
@@ -190,14 +226,8 @@ export function ShopProvider({ children }) {
       }
 
       if (cancelled) return;
-      hydratedUidRef.current = user.uid;
+      wishHydratedUidRef.current = user.uid;
 
-      try {
-        await setDoc(doc(db, 'carts', user.uid), { items: mergedCart, updatedAt: serverTimestamp() });
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[ABIXMART] Failed to save cart to Firestore', err?.code, err?.message);
-      }
       try {
         await setDoc(doc(db, 'wishlists', user.uid), { productIds: mergedWishlist, updatedAt: serverTimestamp() });
       } catch (err) {
@@ -212,23 +242,7 @@ export function ShopProvider({ children }) {
   }, [user, authLoading]);
 
   useEffect(() => {
-    if (!user || hydratedUidRef.current !== user.uid) return;
-    if (skipNextCartSaveRef.current) {
-      skipNextCartSaveRef.current = false;
-      return;
-    }
-    (async () => {
-      try {
-        await setDoc(doc(db, 'carts', user.uid), { items: cart, updatedAt: serverTimestamp() });
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[ABIXMART] Failed to save cart to Firestore', err?.code, err?.message);
-      }
-    })();
-  }, [cart, user]);
-
-  useEffect(() => {
-    if (!user || hydratedUidRef.current !== user.uid) return;
+    if (!user || wishHydratedUidRef.current !== user.uid) return;
     if (skipNextWishlistSaveRef.current) {
       skipNextWishlistSaveRef.current = false;
       return;
@@ -243,60 +257,70 @@ export function ShopProvider({ children }) {
     })();
   }, [wishlist, user]);
 
-  // G4: every cart line is re-resolved against the live catalog.
-  //   cartItems        = purchasable lines only (product is `available`, the
-  //                      variant still exists, a price exists). Price, label
-  //                      and jarsPerPack come from the catalog, so a stale
-  //                      stored unitPrice can never be charged.
-  //   unavailableItems = lines that cannot be bought (product missing/not
-  //                      available, variant removed, no price). They stay in
-  //                      the cart until the customer removes them.
-  // While the first catalog read is in flight nothing is classified.
+  /* ───────────────────────── derived cart ─────────────────────────
+     Every stored line (product + jars) is re-resolved against the live
+     catalog, so the variant, the price and the displayed quantity are always
+     derived from the same jar count.
+
+     cartItems keeps the shape checkout already reads:
+       qty        = packages (1 for a bundle) so that subtotal = unitPrice x qty
+       jars       = what the customer sees as the quantity
+     unavailableItems = lines that cannot be bought. They stay in the cart
+     until the customer removes them. While the first catalog read is in
+     flight nothing is classified. */
   const { cartItems, unavailableItems } = useMemo(() => {
     const ok = [];
     const bad = [];
     if (catalogLoading) return { cartItems: ok, unavailableItems: bad };
 
-    cart.forEach((c) => {
-      const product = productById(c.id);
+    cartSnap.lines.forEach(({ id, jars }) => {
+      const product = productById(id);
+      const base = { id, jars, qty: jars, variantId: null, variantLabel: null };
+
       if (!product || product.status !== 'available') {
-        bad.push({ ...c, product: product || null, reason: 'unavailable' });
+        bad.push({ ...base, product: product || null, reason: 'unavailable' });
         return;
       }
 
-      let unitPrice;
-      let jarsPerPack = 1;
-      let variantLabel = c.variantLabel ?? null;
-
-      if (c.variantId) {
-        const v = (product.variants || []).find((x) => x.id === c.variantId);
-        if (!v) {
-          bad.push({ ...c, product, reason: 'variant-missing' });
-          return;
-        }
-        unitPrice = v.price;
-        jarsPerPack = v.jars || 1;
-        variantLabel = v.name;
-      } else {
-        unitPrice = product.price;
-      }
-
-      if (unitPrice === null || unitPrice === undefined || !Number.isFinite(unitPrice)) {
-        bad.push({ ...c, product, reason: 'no-price' });
+      const r = resolveLine(product, jars);
+      if (!r) {
+        bad.push({ ...base, product, reason: 'no-price' });
         return;
       }
 
-      ok.push({ ...c, product, variantLabel, unitPrice, jarsPerPack, subtotal: unitPrice * c.qty });
+      ok.push({
+        id,
+        product,
+        jars: r.jars,
+        qty: r.packages,
+        variantId: r.variantId,
+        variantLabel: r.variantLabel,
+        unitPrice: r.unitPrice,
+        jarsPerPack: r.jarsPerPack,
+        subtotal: r.subtotal,
+        maxJars: bundleCeiling(product),
+      });
     });
 
     return { cartItems: ok, unavailableItems: bad };
-  }, [cart, productById, catalogLoading]);
+  }, [cartSnap.lines, productById, catalogLoading]);
 
-  const cartCount = useMemo(() => cart.reduce((n, c) => n + c.qty, 0), [cart]);
+  // Same lines the store holds, in the shape older screens read.
+  const cart = useMemo(
+    () => cartSnap.lines.map((l) => ({ id: l.id, jars: l.jars, qty: l.jars, variantId: null })),
+    [cartSnap.lines]
+  );
+
+  const cartCount = useMemo(() => cartSnap.lines.reduce((n, l) => n + l.jars, 0), [cartSnap.lines]);
   const cartTotal = useMemo(() => cartItems.reduce((sum, c) => sum + c.subtotal, 0), [cartItems]);
 
+  // true until the saved cart has loaded; 'load' = it could not be loaded,
+  // 'save' = the latest change could not be saved yet (it keeps retrying).
+  const cartResolving = catalogLoading || cartSnap.status === 'idle' || cartSnap.status === 'hydrating';
+  const cartError = cartSnap.status === 'error' ? 'load' : cartSnap.syncState === 'error' ? 'save' : null;
+
   const value = {
-    cart, cartItems, unavailableItems, cartResolving: catalogLoading, cartCount, cartTotal,
+    cart, cartItems, unavailableItems, cartResolving, cartError, retryCart, cartCount, cartTotal,
     addToCart, removeFromCart, updateQty, clearCart,
     wishlist, toggleWishlist, isInWishlist, wishlistCount: wishlist.length,
     checkoutOpen, checkoutPrefill, openCheckout, closeCheckout,

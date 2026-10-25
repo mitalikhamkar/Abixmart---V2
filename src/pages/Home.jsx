@@ -3,7 +3,6 @@ import React from 'react';
 import Hero from '@/components/abix/Hero';
 import ShilajitShowcase from '@/components/abix/ShilajitShowcase';
 import WhatsGrowingNext from '@/components/abix/WhatsGrowingNext';
-import AbixmartCircle from '@/components/abix/AbixmartCircle';
 import HomeReviews from '@/components/abix/HomeReviews';
 import HomeRail from '@/components/abix/home/HomeRail';
 import PageTransition from '@/components/abix/PageTransition';
@@ -22,7 +21,6 @@ export default function Home() {
       <ShilajitShowcase />
       <WhatsGrowingNext />
       <div id="circle">
-        <AbixmartCircle />
       </div>
       <HomeReviews />
       <HomeRail />

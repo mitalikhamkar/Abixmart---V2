@@ -1,11 +1,44 @@
-import React, { useState } from 'react';
+// src/pages/ForgotPassword.jsx
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
 import { MailCheck } from 'lucide-react';
 import PageTransition from '@/components/abix/PageTransition';
 import CinematicAuthShell from '@/components/abix/CinematicAuthShell';
 import { useAuth } from '@/lib/AuthContext';
 import { mapAuthError } from '@/lib/authErrors';
+import { ABIX } from '@/components/abix/brandColors';
 import loginImage from '@/assets/authentication/login.png';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const RESEND_COOLDOWN_S = 30;
+
+// Envelope icon with a soft ring that pulses outward.
+function SentBadge() {
+  const reduce = useReducedMotion();
+  return (
+    <div className="relative mx-auto mb-5 flex h-16 w-16 items-center justify-center">
+      {!reduce && (
+        <motion.span
+          aria-hidden="true"
+          className="absolute inset-0 rounded-full border"
+          style={{ borderColor: ABIX.goldLight }}
+          initial={{ scale: 0.8, opacity: 0.6 }}
+          animate={{ scale: 1.6, opacity: 0 }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: 'easeOut' }}
+        />
+      )}
+      <motion.span
+        className="relative flex h-16 w-16 items-center justify-center rounded-full border border-ivory/20 bg-ivory/5"
+        initial={reduce ? false : { scale: 0.6, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 220, damping: 16 }}
+      >
+        <MailCheck size={26} className="text-gold-light" />
+      </motion.span>
+    </div>
+  );
+}
 
 export default function ForgotPassword() {
   const { resetPassword } = useAuth();
@@ -16,6 +49,13 @@ export default function ForgotPassword() {
   const [sent, setSent] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendDone, setResendDone] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
 
   const sendReset = async () => {
     await resetPassword(email.trim());
@@ -26,8 +66,12 @@ export default function ForgotPassword() {
     if (loading) return;
     setError('');
 
-    if (!email) {
+    if (!email.trim()) {
       setError('Please enter your email address.');
+      return;
+    }
+    if (!EMAIL_RE.test(email.trim())) {
+      setError("That email address doesn't look right.");
       return;
     }
 
@@ -35,6 +79,7 @@ export default function ForgotPassword() {
     try {
       await sendReset();
       setSent(true);
+      setCooldown(RESEND_COOLDOWN_S);
     } catch (err) {
       setError(mapAuthError(err));
     } finally {
@@ -43,12 +88,13 @@ export default function ForgotPassword() {
   };
 
   const handleResend = async () => {
-    if (resendLoading) return;
+    if (resendLoading || cooldown > 0) return;
     setResendLoading(true);
     setError('');
     try {
       await sendReset();
       setResendDone(true);
+      setCooldown(RESEND_COOLDOWN_S);
       setTimeout(() => setResendDone(false), 4000);
     } catch (err) {
       setError(mapAuthError(err));
@@ -56,6 +102,14 @@ export default function ForgotPassword() {
       setResendLoading(false);
     }
   };
+
+  const resendLabel = resendLoading
+    ? 'Resending…'
+    : cooldown > 0
+    ? `Resend in ${cooldown}s`
+    : resendDone
+    ? 'Sent again ✓'
+    : 'Resend Link';
 
   return (
     <PageTransition>
@@ -76,16 +130,14 @@ export default function ForgotPassword() {
       >
         {sent ? (
           <div>
-            <div className="flex items-start gap-3 border border-ivory/15 bg-ivory/5 p-5">
-              <MailCheck size={20} className="text-gold-light shrink-0 mt-0.5" />
-              <div>
-                <p className="text-ivory leading-relaxed">
-                  If an account exists for <span className="font-medium">{email}</span>, a reset link is on its way.
-                </p>
-                <p className="mt-2 text-sm text-ivory/55 leading-relaxed">
-                  Check your spam or promotions folder if it doesn't arrive within a few minutes.
-                </p>
-              </div>
+            <SentBadge />
+            <div className="border border-ivory/15 bg-ivory/5 p-5 text-center">
+              <p className="text-ivory leading-relaxed [overflow-wrap:anywhere]">
+                If an account exists for <span className="font-medium">{email}</span>, a reset link is on its way.
+              </p>
+              <p className="mt-2 text-sm text-ivory/55 leading-relaxed">
+                Check your spam or promotions folder if it doesn't arrive within a few minutes.
+              </p>
             </div>
 
             {error && (
@@ -95,15 +147,26 @@ export default function ForgotPassword() {
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
               <button
                 onClick={handleResend}
-                disabled={resendLoading}
+                disabled={resendLoading || cooldown > 0}
                 className="inline-flex items-center justify-center h-12 px-6 border border-ivory/25 text-ivory/90 text-sm tracking-wide hover:bg-ivory/10 transition-colors flex-1 disabled:opacity-50"
               >
-                {resendLoading ? 'Resending…' : resendDone ? 'Sent again ✓' : 'Resend Link'}
+                {resendLabel}
               </button>
               <Link to="/login" className="btn-primary-inverse flex-1 text-center">
                 Back to Login
               </Link>
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSent(false);
+                setError('');
+              }}
+              className="mt-4 w-full min-h-[44px] text-center text-sm text-ivory/55 underline underline-offset-4 hover:text-ivory transition-colors"
+            >
+              Use a different email
+            </button>
           </div>
         ) : (
           <>
@@ -112,9 +175,12 @@ export default function ForgotPassword() {
             )}
             <form onSubmit={handleSubmit} className="space-y-5" noValidate>
               <div>
-                <label className="block label-meta text-ivory/50 mb-1">Email</label>
+                <label htmlFor="forgot-email" className="block label-meta text-ivory/50 mb-1">Email</label>
                 <input
+                  id="forgot-email"
                   type="email"
+                  autoComplete="email"
+                  inputMode="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, Search, Heart, ShoppingBag, User, LogOut } from 'lucide-react';
 import { useShop } from '@/lib/ShopContext';
 import { useAuth } from '@/lib/AuthContext';
+import { ABIX } from '@/components/abix/brandColors';
 import logo from '@/assets/logo/Abixmart-header.png';
 
 const navLinks = [
@@ -60,12 +61,10 @@ export default function Header() {
     ? 'bg-transparent'
     : 'bg-[#F2ECE2]/95 backdrop-blur-md border-b border-charcoal/10';
 
-  const navLinkClass = transparent
-    ? 'text-ivory/80 hover:text-ivory'
-    : 'text-charcoal/65 hover:text-charcoal';
+  // Gold accent for the nav links and the profile circle.
+  // Deeper gold on the cream header (readable), lighter gold over the dark home hero.
+  const accent = transparent ? ABIX.goldLight : ABIX.gold;
 
-  const navLinkActiveClass = transparent ? 'text-ivory' : 'text-charcoal';
-  const navUnderlineClass = transparent ? 'bg-gold-light' : 'bg-resin';
   const iconClass = transparent
     ? 'text-ivory/80 hover:text-ivory'
     : 'text-charcoal/65 hover:text-charcoal';
@@ -91,15 +90,17 @@ export default function Header() {
                 <Link
                   key={l.to}
                   to={l.to}
-                  className={`relative text-[13px] font-medium tracking-wide transition-colors duration-300 ${navLinkClass} ${
-                    active ? navLinkActiveClass : ''
+                  className={`relative text-[13px] font-medium tracking-wide transition-opacity duration-300 hover:opacity-100 ${
+                    active ? 'opacity-100' : 'opacity-75'
                   }`}
+                  style={{ color: accent }}
                 >
                   {l.label}
                   {active && (
                     <motion.span
                       layoutId="nav-underline"
-                      className={`absolute -bottom-1.5 left-0 h-px w-full ${navUnderlineClass}`}
+                      className="absolute -bottom-1.5 left-0 h-px w-full"
+                      style={{ backgroundColor: accent }}
                     />
                   )}
                 </Link>
@@ -150,10 +151,12 @@ export default function Header() {
 
             {user ? (
               <div className="relative" ref={accountMenuRef}>
+                {/* Profile circle: gold ring + gold letter, fills gold on hover */}
                 <button
                   onClick={() => setAccountMenuOpen((v) => !v)}
                   aria-label="Account menu"
-                  className="ml-2 h-9 w-9 rounded-full bg-ivory text-charcoal font-display text-sm flex items-center justify-center ring-1 ring-charcoal/10 hover:bg-resin hover:text-ivory hover:ring-resin transition-colors duration-300"
+                  className="ml-2 h-9 w-9 rounded-full bg-ivory font-display text-sm flex items-center justify-center border transition-colors duration-300 hover:!bg-[var(--abix-accent)] hover:!text-[#151417]"
+                  style={{ color: accent, borderColor: accent, '--abix-accent': accent }}
                 >
                   {initial}
                 </button>
