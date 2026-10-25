@@ -3,11 +3,13 @@ import { motion } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { gsap } from '@/lib/gsap';
 import leafImg from '@/assets/hero/leaf.png';
+import logoImg from '@/assets/logo/Abixmart-full.png';
 import { FOREST } from '@/components/abix/upcoming/livingCollection/theme';
+import { ABIX } from '@/components/abix/brandColors';
 
-// True while the leaf transition is covering the screen. Pages mounting at
-// that moment skip their own fade-in, so the new page is already fully visible
-// when the veil lifts (a second fade under the veil looked like a flicker).
+// True while the transition is covering the screen. Pages mounting at that
+// moment skip their own fade-in, so the new page is fully visible when the
+// veil lifts (a second fade under the veil looked like a flicker).
 let ritualRunning = false;
 const setRunning = (v) => {
   ritualRunning = v;
@@ -27,27 +29,27 @@ export default function PageTransition({ children }) {
   );
 }
 
-/* ───────────────────── "Falling leaves" transition ─────────────────────
-   Shown only when moving between /shop and /shop/:slug.
+/* ─────────────────────────── Botanical passage ───────────────────────────
+   Plays on EVERY page-to-page navigation inside the site (Home, Shop, About,
+   Support, product pages, cart, account…).
 
-   Leaves (the same leaf asset as the hero) drift down across the screen with a
-   slow sway and spin. A forest-green veil fades in behind them, the route
-   changes underneath, then the veil lifts while the last leaves finish falling
-   over the new page. Only transform and opacity are animated.
+   1. A click on an internal link is intercepted. The current page softens under
+      a forest-green veil with a warm amber glow; the ABIXMART emblem and a fine
+      gold line appear; leaves drift down across the screen.
+   2. The route changes the moment the veil is closed (never waiting longer than
+      the route needs), and the veil lifts about a tenth of a second later.
+   3. Back/Forward and programmatic navigation (e.g. after sign-in) get the veil
+      at once, then lift.
 
-   - A link click between the two pages is intercepted so the veil is fully
-     closed before the route changes.
-   - Back/Forward and programmatic navigation get the veil at once, then lift.
-   - Phones use fewer, faster leaves. Reduced motion skips the effect.
-   - A safety timer always clears the overlay; a running transition never
-     starts a second one; the overlay never blocks clicks once it is lifting. */
+   Not triggered by: links that only change the #hash or ?query, new-tab clicks
+   (ctrl/cmd/shift), external links, downloads, the admin area, or reduced motion.
+   The overlay stops capturing clicks the moment it starts lifting. A safety timer
+   always clears it, rapid repeated navigation never stacks a second run, and
+   only transform and opacity are animated. */
 
-const kindOf = (p) => (/^\/shop\/?$/.test(p) ? 'shop' : /^\/shop\/[^/]+\/?$/.test(p) ? 'detail' : null);
-const isRitualPair = (a, b) => {
-  const x = kindOf(a);
-  const y = kindOf(b);
-  return Boolean(x && y && x !== y);
-};
+const norm = (p) => (p.length > 1 ? p.replace(/\/+$/, '') : p) || '/';
+const isSitePath = (p) => !p.startsWith('/admin');
+const isPageChange = (a, b) => norm(a) !== norm(b) && isSitePath(a) && isSitePath(b);
 const prefersReduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isCompact = () => window.matchMedia('(max-width: 767px)').matches;
 
@@ -57,20 +59,24 @@ export function RitualTransition() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   // useNavigate's identity changes with the route, so it is read through a ref;
-  // listing it as an effect dependency would rebuild this transition mid-navigation.
+  // listing it as an effect dependency would reset the transition mid-navigation.
   const navRef = useRef(navigate);
   navRef.current = navigate;
 
   const sheetRef = useRef(null);
   const veilRef = useRef(null);
+  const emblemRef = useRef(null);
+  const lineRef = useRef(null);
   const leafEls = useRef([]);
   const ctrlRef = useRef(null);
 
   useLayoutEffect(() => {
     const sheet = sheetRef.current;
     const veil = veilRef.current;
+    const emblem = emblemRef.current;
+    const line = lineRef.current;
     const leaves = leafEls.current.filter(Boolean);
-    if (!sheet || !veil || leaves.length === 0) return undefined;
+    if (!sheet || !veil || !emblem || !line || leaves.length === 0) return undefined;
 
     const st = {
       phase: 'idle', // idle | closing | covered | opening
@@ -88,6 +94,8 @@ export function RitualTransition() {
     const hideAll = () => {
       gsap.set(sheet, { autoAlpha: 0, pointerEvents: 'none' });
       gsap.set(veil, { autoAlpha: 0 });
+      gsap.set(emblem, { autoAlpha: 0 });
+      gsap.set(line, { scaleX: 0 });
       gsap.set(leaves, { autoAlpha: 0 });
     };
 
@@ -116,7 +124,7 @@ export function RitualTransition() {
       st.safety = window.setTimeout(reset, 5000);
     };
 
-    // A fresh, randomised fall every time.
+    // A fresh, randomised drift of leaves every time.
     const startLeaves = (compact) => {
       if (st.leafTl) st.leafTl.kill();
       st.leavesDone = false;
@@ -134,13 +142,13 @@ export function RitualTransition() {
           gsap.set(el, { autoAlpha: 0 });
           return;
         }
-        const size = compact ? 40 + Math.random() * 34 : 60 + Math.random() * 52;
+        const size = compact ? 38 + Math.random() * 32 : 56 + Math.random() * 48;
         const left = ((i + Math.random() * 0.8) / count) * 100;
-        const delay = Math.random() * (compact ? 0.35 : 0.5);
-        const dur = (compact ? 1.15 : 1.4) + Math.random() * 0.5;
-        const sway = (compact ? 18 : 40) + Math.random() * 38;
+        const delay = Math.random() * (compact ? 0.28 : 0.4);
+        const dur = (compact ? 0.85 : 1.0) + Math.random() * 0.45;
+        const sway = (compact ? 16 : 36) + Math.random() * 34;
         const dir = Math.random() < 0.5 ? -1 : 1;
-        const spin = dir * (110 + Math.random() * 170);
+        const spin = dir * (100 + Math.random() * 160);
 
         gsap.set(el, {
           width: size,
@@ -150,7 +158,7 @@ export function RitualTransition() {
           rotation: Math.random() * 60 - 30,
           autoAlpha: 0,
         });
-        tl.to(el, { autoAlpha: 0.95, duration: 0.2, ease: 'none' }, delay)
+        tl.to(el, { autoAlpha: 0.95, duration: 0.18, ease: 'none' }, delay)
           .to(el, { y: '120vh', duration: dur, ease: 'none' }, delay)
           .fromTo(
             el,
@@ -168,20 +176,21 @@ export function RitualTransition() {
     const open = () => {
       st.phase = 'opening';
       st.veilDone = false;
-      gsap.set(sheet, { pointerEvents: 'none' }); // page is usable while the last leaves fall
-      st.veilTl = gsap.to(veil, {
-        autoAlpha: 0,
-        duration: isCompact() ? 0.45 : 0.65,
-        ease: 'power1.inOut',
-        onComplete: () => {
-          st.veilDone = true;
-          finish();
-        },
-      });
+      gsap.set(sheet, { pointerEvents: 'none' }); // the page is usable while it lifts
+      const compact = isCompact();
+      st.veilTl = gsap
+        .timeline({
+          onComplete: () => {
+            st.veilDone = true;
+            finish();
+          },
+        })
+        .to(emblem, { autoAlpha: 0, y: -6, duration: 0.22, ease: 'power1.in' }, 0)
+        .to(veil, { autoAlpha: 0, duration: compact ? 0.32 : 0.42, ease: 'power1.inOut' }, 0.08);
     };
 
-    // Give the new page a beat to finish mounting while it is still hidden.
-    const scheduleOpen = (delay = 160) => {
+    // A short beat so the new page can finish mounting while it is still covered.
+    const scheduleOpen = (delay = 80) => {
       window.clearTimeout(st.openTimer);
       st.openTimer = window.setTimeout(() => {
         if (st.phase === 'covered') open();
@@ -199,18 +208,22 @@ export function RitualTransition() {
       const compact = isCompact();
       gsap.set(sheet, { autoAlpha: 1, pointerEvents: 'auto' });
       gsap.set(veil, { autoAlpha: 0 });
+      gsap.set(emblem, { autoAlpha: 0, y: 10, scale: 0.96 });
+      gsap.set(line, { scaleX: 0 });
       startLeaves(compact);
 
-      st.veilTl = gsap.timeline({
-        onComplete: () => {
-          st.covered = true;
-          st.phase = 'covered';
-          if (st.routeReady) scheduleOpen(160); // route already changed (e.g. Back pressed)
-          else navRef.current(to);
-        },
-      });
-      // a few leaves are already falling over the old page before the veil closes
-      st.veilTl.to(veil, { autoAlpha: 1, duration: compact ? 0.4 : 0.55, ease: 'power1.inOut' }, compact ? 0.08 : 0.12);
+      st.veilTl = gsap
+        .timeline({
+          onComplete: () => {
+            st.covered = true;
+            st.phase = 'covered';
+            if (st.routeReady) scheduleOpen(80); // route already changed (e.g. Back pressed)
+            else navRef.current(to);
+          },
+        })
+        .to(veil, { autoAlpha: 1, duration: compact ? 0.26 : 0.34, ease: 'power1.inOut' }, 0.06)
+        .to(emblem, { autoAlpha: 1, y: 0, scale: 1, duration: 0.3, ease: 'power2.out' }, 0.16)
+        .to(line, { scaleX: 1, duration: 0.34, ease: 'power2.inOut' }, 0.2);
     };
 
     const onRoute = (path) => {
@@ -221,10 +234,10 @@ export function RitualTransition() {
       if (st.phase !== 'idle') {
         // Our own navigation arriving, or an interruption while running.
         st.routeReady = true;
-        if (st.covered && st.phase === 'covered') scheduleOpen(160);
+        if (st.covered && st.phase === 'covered') scheduleOpen(80);
         return;
       }
-      if (prefersReduced() || !isRitualPair(prev, path)) return;
+      if (prefersReduced() || !isPageChange(prev, path)) return;
 
       // Navigation we did not start (Back/Forward, programmatic): veil at once, then lift.
       st.phase = 'covered';
@@ -235,8 +248,10 @@ export function RitualTransition() {
       setRunning(true);
       gsap.set(sheet, { autoAlpha: 1, pointerEvents: 'auto' });
       gsap.set(veil, { autoAlpha: 1 });
+      gsap.set(emblem, { autoAlpha: 1, y: 0, scale: 1 });
+      gsap.set(line, { scaleX: 1 });
       startLeaves(isCompact());
-      scheduleOpen(480); // the new page's own entrance finishes while hidden
+      scheduleOpen(420); // the new page's own entrance finishes while hidden
     };
 
     const onClick = (e) => {
@@ -250,7 +265,7 @@ export function RitualTransition() {
         return;
       }
       if (url.origin !== window.location.origin) return;
-      if (!isRitualPair(window.location.pathname, url.pathname)) return;
+      if (!isPageChange(window.location.pathname, url.pathname)) return; // same page, hash, query, admin
       if (st.phase !== 'idle' || prefersReduced()) return;
       e.preventDefault();
       startClose(url.pathname + url.search + url.hash);
@@ -279,14 +294,35 @@ export function RitualTransition() {
       className="fixed inset-0 z-[90] overflow-hidden"
       style={{ visibility: 'hidden', opacity: 0, pointerEvents: 'none' }}
     >
+      {/* veil: forest green with a warm amber glow at the centre */}
       <div
         ref={veilRef}
         className="absolute inset-0"
         style={{
-          background: `radial-gradient(70% 60% at 50% 45%, ${FOREST.mid} 0%, ${FOREST.deepest} 100%)`,
           opacity: 0,
+          background: `radial-gradient(36% 30% at 50% 48%, ${ABIX.gold25} 0%, transparent 100%), radial-gradient(75% 65% at 50% 45%, ${FOREST.mid} 0%, ${FOREST.deepest} 100%)`,
         }}
       />
+
+      {/* emblem and a fine gold line */}
+      <div
+        ref={emblemRef}
+        className="absolute left-1/2 top-1/2 flex flex-col items-center"
+        style={{ transform: 'translate(-50%, -50%)', opacity: 0, visibility: 'hidden' }}
+      >
+        <img
+          src={logoImg}
+          alt=""
+          draggable={false}
+          style={{ width: 'clamp(110px, 22vw, 168px)', height: 'auto', display: 'block' }}
+        />
+        <span
+          ref={lineRef}
+          className="block mt-4"
+          style={{ width: 'clamp(90px, 18vw, 140px)', height: 1, background: ABIX.gold, transformOrigin: '50% 50%' }}
+        />
+      </div>
+
       {Array.from({ length: LEAF_MAX }, (_, i) => (
         <img
           key={i}

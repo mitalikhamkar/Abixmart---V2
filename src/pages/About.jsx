@@ -1,313 +1,263 @@
 // src/pages/About.jsx
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, useScroll, useMotionValueEvent } from 'framer-motion';
+import { useGSAP } from '@gsap/react';
+import { gsap } from '@/lib/gsap';
 import PageTransition from '@/components/abix/PageTransition';
 import Eyebrow from '@/components/abix/Eyebrow';
 import ComingSoonMarquee from '@/components/abix/ComingSoonMarquee';
 import MountainToRitual from '@/components/abix/MountainToRitual';
+import LeafShadow from '@/components/abix/home/LeafShadow';
+import AboutRail from '@/components/abix/about/AboutRail';
+import Principles from '@/components/abix/about/Principles';
+import Transparency from '@/components/abix/about/Transparency';
+import EverydayRitual from '@/components/abix/about/EverydayRitual';
+import { ABOUT_CSS } from '@/components/abix/about/aboutMotion';
+import { useScrollReveal } from '@/hooks/useScrollReveal';
+import { useCatalog } from '@/lib/CatalogContext';
+import { FOREST, FOCUS_RING } from '@/components/abix/upcoming/livingCollection/theme';
 import { ABIX } from '@/components/abix/brandColors';
 
 import aboutHero from '@/assets/about/about-hero.png';
-import aboutOrigin from '@/assets/about/about-origin.png';
-import aboutProcess from '@/assets/about/about-process.png';
-import aboutQuality from '@/assets/about/about-quality.png';
 import aboutJourney from '@/assets/about/about-journey.png';
 
-const MATTERS = [
-  {
-    id: 'origin',
-    number: '01',
-    label: 'Origin',
-    title: 'Know where it begins.',
-    body: 'Our Shilajit is gathered from high-altitude Himalayan rock, where it forms slowly over centuries. We collect in small quantities, with respect for the mountain.',
-    image: aboutOrigin,
-  },
-  {
-    id: 'process',
-    number: '02',
-    label: 'Process',
-    title: 'Know what happens to it.',
-    body: 'From sourcing to sealing, every jar passes through deliberate stages of traditional purification and careful handling — shown openly, not summarised away.',
-    image: aboutProcess,
-  },
-  {
-    id: 'quality',
-    number: '03',
-    label: 'Quality',
-    title: 'Know what we check.',
-    body: 'Each batch is checked for quality and consistency before it moves forward. We focus on what we can verify, and we do not make claims we cannot stand behind.',
-    image: aboutQuality,
-  },
-  {
-    id: 'transparency',
-    number: '04',
-    label: 'Transparency',
-    title: 'What we show, we show fully.',
-    body: 'We share our process openly — no invented certifications, no fabricated results, no claims we cannot stand behind.',
-    image: aboutJourney,
-  },
-];
+// Headline, split so each word can rise out of its own mask.
+const HEADLINE = [['Built', 'slowly.'], ['Shown', 'honestly.']];
 
-// CHANGED: ShopCollectionCard and the products import are no longer
-// needed here — the "Collection is just beginning" section now uses
-// ComingSoonMarquee, which pulls coming-soon products directly from
-// products.js itself and renders nothing if there are none.
+// Story order:
+//   hero → principles → journey → transparency → everyday ritual → closing
+// Section backgrounds hand over to each other (obsidian → forest → obsidian),
+// so there is no hard seam between chapters.
 export default function About() {
-  const [activeIndex, setActiveIndex] = useState(0);
+  const rootRef = useRef(null);
+  const heroRef = useRef(null);
+  const heroImgRef = useRef(null);
+  const closingRef = useRef(null);
+  const { comingSoonProducts, loading } = useCatalog();
+  const showGrowing = !loading && comingSoonProducts.length > 0;
 
-  const timelineRef = useRef(null);
-  const { scrollYProgress } = useScroll({
-    target: timelineRef,
-    offset: ['start center', 'end center'],
-  });
+  useScrollReveal(rootRef);
 
-  useMotionValueEvent(scrollYProgress, 'change', (v) => {
-    const idx = Math.min(MATTERS.length - 1, Math.max(0, Math.floor(v * MATTERS.length)));
-    setActiveIndex(idx);
-  });
+  useGSAP(
+    (context) => {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+      // hero: headline words rise out of their masks, then the rest follows
+      const words = context.selector('[data-word]');
+      const fades = context.selector('[data-hero-fade]');
+      gsap.set(words, { yPercent: 115 });
+      gsap.set(fades, { autoAlpha: 0, y: 18 });
+      gsap.set(heroImgRef.current, { scale: 1.12 });
+      gsap
+        .timeline({ defaults: { ease: 'power3.out' } })
+        .to(heroImgRef.current, { scale: 1, duration: 2.2, ease: 'power2.out' }, 0)
+        .to(words, { yPercent: 0, duration: 1, stagger: 0.12 }, 0.25)
+        .to(fades, { autoAlpha: 1, y: 0, duration: 0.8, stagger: 0.12 }, 0.95);
+
+      // parallax and the closing stem, on large screens only
+      if (window.matchMedia('(min-width: 1024px)').matches) {
+        gsap.to(heroImgRef.current, {
+          yPercent: 10,
+          ease: 'none',
+          scrollTrigger: { trigger: heroRef.current, start: 'top top', end: 'bottom top', scrub: true },
+        });
+      }
+      const stem = context.selector('[data-stem]')[0];
+      if (stem) {
+        gsap.set(stem, { strokeDasharray: 1, strokeDashoffset: 1 });
+        gsap.to(stem, {
+          strokeDashoffset: 0,
+          ease: 'none',
+          scrollTrigger: { trigger: closingRef.current, start: 'top 75%', end: 'center 60%', scrub: true },
+        });
+      }
+    },
+    { scope: rootRef }
+  );
+
+  const toApproach = (e) => {
+    const el = document.getElementById('principles');
+    if (!el) return;
+    e.preventDefault();
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
     <PageTransition>
-      {/* ============ HERO ============ */}
-      <section className="relative min-h-[78vh] flex items-end overflow-hidden" style={{ backgroundColor: ABIX.obsidian }}>
-        <motion.div
-          initial={{ opacity: 0, scale: 1.06 }}
-          animate={{ opacity: 0.55, scale: 1 }}
-          transition={{ duration: 1.6, ease: [0.16, 1, 0.3, 1] }}
-          className="absolute inset-0"
+      <div ref={rootRef}>
+        <style>{ABOUT_CSS}</style>
+        <AboutRail />
+
+        {/* ============ HERO ============ */}
+        <section
+          id="about-hero"
+          ref={heroRef}
+          aria-labelledby="about-title"
+          className="relative min-h-[88svh] flex items-end overflow-hidden grain"
+          style={{ backgroundColor: ABIX.obsidian }}
         >
-          <img src={aboutHero} alt="ABIXMART origin" className="h-full w-full object-cover object-center" />
-        </motion.div>
-        <div className="absolute inset-0" style={{ background: `linear-gradient(0deg, ${ABIX.obsidian} 0%, ${ABIX.obsidian}8C 55%, ${ABIX.obsidian}1A 100%)` }} />
-        <div className="absolute inset-0" style={{ background: `linear-gradient(90deg, ${ABIX.obsidian}B3 0%, ${ABIX.obsidian}1A 45%, transparent 100%)` }} />
-        <div className="absolute inset-0 grain opacity-[0.05]" />
-
-        <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10 pb-20 lg:pb-28 pt-32 w-full">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-            className="max-w-2xl"
-          >
-            <Eyebrow light>About ABIXMART</Eyebrow>
-            <h1 className="mt-6 font-display text-5xl sm:text-6xl lg:text-7xl leading-[0.98] tracking-tight" style={{ color: ABIX.ivory }}>
-              Built slowly.
-              <br />
-              Shown honestly.
-            </h1>
-            <p className="mt-7 max-w-xl text-lg leading-relaxed" style={{ color: ABIX.ivory70 }}>
-              ABIXMART is being built around a simple principle: if we put something into your daily
-              ritual, you should be able to understand where it came from, how it was made, and why it
-              belongs there.
-            </p>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ============ ABIXMART STANDARD — "Know what matters." ============ */}
-      <section className="py-16 lg:py-24 border-t" style={{ backgroundColor: ABIX.obsidian, borderColor: ABIX.ivory12 }}>
-        <div className="mx-auto max-w-7xl px-6 lg:px-10">
-          <div className="max-w-xl mb-12 lg:mb-16">
-            <Eyebrow light>The ABIXMART Standard</Eyebrow>
-            <h2 className="mt-5 font-display text-4xl sm:text-5xl leading-[1.03] tracking-tight" style={{ color: ABIX.ivory }}>
-              Know what matters.
-            </h2>
-            <p className="mt-5 text-base leading-relaxed" style={{ color: ABIX.ivory45 }}>
-              We focus on four things you can actually verify — not stories we can't back up.
-            </p>
+          <div className="absolute inset-0 overflow-hidden">
+            <img
+              ref={heroImgRef}
+              src={aboutHero}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 h-full w-full object-cover object-center"
+              style={{ opacity: 0.6 }}
+            />
           </div>
+          {/* drifting amber light and leaf shadow */}
+          <div
+            aria-hidden="true"
+            className="abix-amber absolute -right-[10%] top-[8%] h-[70%] w-[70%] pointer-events-none"
+            style={{ background: `radial-gradient(closest-side, ${ABIX.gold25} 0%, transparent 70%)` }}
+          />
+          <LeafShadow side="right" opacity={0.08} />
+          <div
+            aria-hidden="true"
+            className="absolute inset-0"
+            style={{ background: `linear-gradient(0deg, ${ABIX.obsidian} 0%, ${ABIX.obsidian}99 40%, ${ABIX.obsidian}26 100%)` }}
+          />
+          <div
+            aria-hidden="true"
+            className="absolute inset-0"
+            style={{ background: `linear-gradient(90deg, ${ABIX.obsidian}CC 0%, ${ABIX.obsidian}33 55%, transparent 100%)` }}
+          />
 
-          <div className="hidden lg:grid grid-cols-12 gap-16 items-start">
-            <div ref={timelineRef} className="col-span-5">
-              <div className="relative pl-9">
-                <div className="absolute left-[3px] top-1 bottom-1 w-px" style={{ background: ABIX.ivory12 }} />
-                <motion.div
-                  className="absolute left-[3px] top-1 w-px origin-top"
-                  style={{ background: ABIX.gold }}
-                  animate={{ height: `${(activeIndex / (MATTERS.length - 1)) * 100}%` }}
-                  transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                />
-
-                {MATTERS.map((m, i) => {
-                  const active = i === activeIndex;
-                  return (
-                    <div key={m.id} className="relative py-8">
-                      <span
-                        className="absolute -left-9 top-[30px] h-[7px] w-[7px] rounded-full transition-all duration-500"
-                        style={{
-                          background: active ? ABIX.gold : ABIX.ivory25,
-                          transform: active ? 'scale(1.35)' : 'scale(1)',
-                        }}
-                      />
-                      <span
-                        className="font-grotesk text-xs tracking-luxe-sm transition-colors duration-500"
-                        style={{ color: active ? ABIX.gold : ABIX.ivory45 }}
-                      >
-                        {m.number} — {m.label.toUpperCase()}
-                      </span>
-                      <h3
-                        className="mt-2 font-display text-2xl xl:text-3xl leading-tight transition-colors duration-500"
-                        style={{ color: active ? ABIX.ivory : ABIX.ivory25 }}
-                      >
-                        {m.title}
-                      </h3>
-                      <p
-                        className="mt-3 text-sm leading-relaxed max-w-sm transition-opacity duration-500"
-                        style={{ color: ABIX.ivory45, opacity: active ? 1 : 0.35 }}
-                      >
-                        {m.body}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="col-span-7 sticky top-28 self-start">
-              <div className="relative aspect-[4/3] xl:aspect-[16/11] overflow-hidden" style={{ backgroundColor: ABIX.obsidian }}>
-                {MATTERS.map((m, i) => {
-                  const active = i === activeIndex;
-                  return (
-                    <motion.img
-                      key={m.id}
-                      src={m.image}
-                      alt={m.title}
-                      className="absolute inset-0 h-full w-full object-cover"
-                      initial={false}
-                      animate={{
-                        opacity: active ? 1 : 0,
-                        clipPath: active ? 'inset(0% 0% 0% 0%)' : 'inset(4% 4% 4% 4%)',
-                        filter: active ? 'blur(0px)' : 'blur(6px)',
-                      }}
-                      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                    />
-                  );
-                })}
-                <div className="absolute inset-0 ring-1 ring-inset" style={{ boxShadow: `inset 0 0 0 1px ${ABIX.ivory12}` }} />
-              </div>
-            </div>
-          </div>
-
-          <div className="lg:hidden space-y-14">
-            {MATTERS.map((m) => (
-              <motion.div
-                key={m.id}
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-60px' }}
-                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-10 pt-36 pb-16 lg:pb-24 w-full">
+            <div className="max-w-2xl">
+              <div data-hero-fade><Eyebrow light>About ABIXMART</Eyebrow></div>
+              <h1
+                id="about-title"
+                className="mt-6 font-display text-5xl sm:text-6xl lg:text-7xl xl:text-8xl leading-[0.98] tracking-tight"
+                style={{ color: ABIX.ivory }}
               >
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: ABIX.gold }} />
-                  <span className="font-grotesk text-xs tracking-luxe-sm" style={{ color: ABIX.gold }}>
-                    {m.number} — {m.label.toUpperCase()}
+                {HEADLINE.map((line, li) => (
+                  <span key={li} className="block">
+                    {line.map((w, wi) => (
+                      <span key={w} className="inline-block overflow-hidden align-bottom pb-[0.14em] -mb-[0.14em]">
+                        <span
+                          data-word
+                          className={`inline-block ${li === 1 ? 'italic' : ''}`}
+                          style={li === 1 ? { color: ABIX.goldLight } : undefined}
+                        >
+                          {w}
+                          {wi < line.length - 1 ? '\u00A0' : ''}
+                        </span>
+                      </span>
+                    ))}
+                  </span>
+                ))}
+              </h1>
+              <p data-hero-fade className="mt-7 max-w-md text-lg leading-relaxed" style={{ color: ABIX.ivory70 }}>
+                If something belongs in your daily ritual, you should be able to see where it came from and how it was made.
+              </p>
+              <div data-hero-fade className="mt-9">
+                <a
+                  href="#principles"
+                  onClick={toApproach}
+                  className={`group inline-flex w-full sm:w-auto items-center justify-center h-14 px-9 text-[12px] font-semibold tracking-luxe-sm uppercase rounded-full transition-colors duration-300 hover:brightness-110 ${FOCUS_RING}`}
+                  style={{ backgroundColor: ABIX.gold, color: FOREST.deepest }}
+                >
+                  Discover our approach
+                  <span className="ml-3 transition-transform duration-300 group-hover:translate-y-0.5" aria-hidden="true">↓</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <Principles />
+        <MountainToRitual />
+        <Transparency />
+        <EverydayRitual />
+
+        {/* ============ CLOSING ============ */}
+        <section
+          id="closing"
+          ref={closingRef}
+          aria-labelledby="closing-title"
+          className="relative overflow-hidden grain"
+          style={{
+            background: `linear-gradient(180deg, ${FOREST.deep} 0%, ${FOREST.deepest} 55%, ${ABIX.obsidian} 100%)`,
+          }}
+        >
+          <img
+            src={aboutJourney}
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover pointer-events-none"
+            style={{
+              opacity: 0.14,
+              maskImage: 'linear-gradient(to bottom, transparent 0%, black 35%, transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 35%, transparent 100%)',
+            }}
+          />
+          <LeafShadow side="left" opacity={0.06} className="inset-x-0 top-0 h-[70%]" />
+
+          <div className="relative z-10 mx-auto max-w-3xl px-6 lg:px-10 pt-24 lg:pt-36 text-center">
+            <svg aria-hidden="true" viewBox="0 0 40 120" className="mx-auto h-24 w-auto" fill="none">
+              <path
+                data-stem
+                pathLength="1"
+                d="M20 120 C 20 90, 14 70, 20 44 S 26 14, 20 0"
+                stroke={ABIX.gold}
+                strokeWidth="1.2"
+                strokeLinecap="round"
+              />
+            </svg>
+            <div data-reveal className="mt-6 flex justify-center"><Eyebrow light>What comes next</Eyebrow></div>
+            <h2
+              id="closing-title"
+              data-reveal
+              data-reveal-delay="0.08"
+              className="mt-5 font-display text-4xl sm:text-5xl lg:text-6xl leading-[1.05] tracking-tight"
+              style={{ color: ABIX.ivory }}
+            >
+              The collection is{' '}
+              <span className="italic" style={{ color: ABIX.gold }}>only beginning.</span>
+            </h2>
+            <p data-reveal data-reveal-delay="0.16" className="mt-6 text-lg leading-relaxed max-w-xl mx-auto" style={{ color: ABIX.ivory70 }}>
+              Shilajit is where ABIXMART begins. More will follow, carefully and transparently, with the same
+              respect for origin and process.
+            </p>
+            <div data-reveal data-reveal-delay="0.24" className="mt-10 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-4">
+              <Link
+                to="/shop/shilajit"
+                className={`group inline-flex items-center justify-center h-14 px-9 text-[12px] font-semibold tracking-luxe-sm uppercase rounded-full transition-colors duration-300 hover:brightness-110 ${FOCUS_RING}`}
+                style={{ backgroundColor: ABIX.gold, color: FOREST.deepest }}
+              >
+                Explore Shilajit
+                <span className="ml-3 transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true">→</span>
+              </Link>
+              <Link
+                to="/support#contact"
+                className={`inline-flex items-center justify-center h-14 px-9 text-[12px] font-semibold tracking-luxe-sm uppercase rounded-full border transition-colors duration-300 hover:bg-[rgba(199,174,125,0.08)] ${FOCUS_RING}`}
+                style={{ color: ABIX.goldLight, borderColor: `${ABIX.goldLight}66` }}
+              >
+                Contact us
+              </Link>
+            </div>
+          </div>
+
+          {/* existing pre-order strip, kept as a quiet part of the ending */}
+          {showGrowing && (
+            <div className="relative z-10 mt-20 lg:mt-28 pb-20 lg:pb-28">
+              <div className="mx-auto max-w-7xl px-6 lg:px-10 mb-8">
+                <div data-reveal className="flex items-center gap-4">
+                  <span data-line className="block h-px w-14" style={{ backgroundColor: ABIX.gold }} />
+                  <span className="font-grotesk text-[11px] uppercase tracking-luxe-sm" style={{ color: ABIX.gold }}>
+                    Growing next
                   </span>
                 </div>
-                <h3 className="font-display text-2xl leading-tight" style={{ color: ABIX.ivory }}>
-                  {m.title}
-                </h3>
-                <p className="mt-3 text-sm leading-relaxed max-w-md" style={{ color: ABIX.ivory45 }}>
-                  {m.body}
-                </p>
-                <div className="mt-5 relative aspect-[4/3] overflow-hidden" style={{ backgroundColor: ABIX.obsidian }}>
-                  <img src={m.image} alt={m.title} className="h-full w-full object-cover" />
-                  <div className="absolute inset-0 ring-1 ring-inset" style={{ boxShadow: `inset 0 0 0 1px ${ABIX.ivory12}` }} />
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ============ FROM THE MOUNTAIN TO THE RITUAL ============ */}
-      <section className="pt-16 lg:pt-24 border-t" style={{ backgroundColor: ABIX.obsidian, borderColor: ABIX.ivory12 }}>
-        <div className="mx-auto max-w-7xl px-6 lg:px-10 pb-4">
-          <div className="max-w-xl">
-            <Eyebrow light>The Journey</Eyebrow>
-            <h2 className="mt-5 font-display text-4xl sm:text-5xl leading-[1.03] tracking-tight" style={{ color: ABIX.ivory }}>
-              From the mountain to your ritual.
-            </h2>
-            <p className="mt-5 text-base leading-relaxed" style={{ color: ABIX.ivory45 }}>
-              Every batch of ABIXMART Shilajit travels a long, deliberate path — from high-altitude
-              Himalayan rock to your everyday ritual. No shortcuts.
-            </p>
-          </div>
-        </div>
-      </section>
-      <MountainToRitual />
-
-      {/* ============ WHAT WE DON'T CLAIM ============ */}
-      <section className="py-16 lg:py-24 border-t" style={{ backgroundColor: ABIX.obsidian, borderColor: ABIX.ivory12 }}>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-80px' }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="mx-auto max-w-3xl px-6 lg:px-10 text-center"
-        >
-          <Eyebrow light className="justify-center">The Line We Won't Cross</Eyebrow>
-          <h2 className="mt-6 font-display text-4xl sm:text-5xl leading-[1.05] tracking-tight" style={{ color: ABIX.ivory }}>
-            What we don't claim.
-          </h2>
-          <ul className="mt-8 space-y-3 text-lg" style={{ color: ABIX.ivory70 }}>
-            <li>No invented certifications.</li>
-            <li>No fabricated laboratory results.</li>
-            <li>No miracle promises.</li>
-            <li>No exaggerated health claims.</li>
-          </ul>
-          <p className="mt-8 text-base leading-relaxed max-w-xl mx-auto" style={{ color: ABIX.ivory45 }}>
-            We'd rather show you what we know than manufacture certainty around what we don't.
-          </p>
-        </motion.div>
-      </section>
-
-      {/* ============ THE COLLECTION IS JUST BEGINNING ============ */}
-      {/* CHANGED: static 4-up ShopCollectionCard grid replaced with the
-          shared ComingSoonMarquee — this section now renders whenever
-          there are coming-soon products in products.js, without About
-          needing to know or filter that list itself. */}
-      <section className="py-16 lg:py-24 border-t" style={{ backgroundColor: ABIX.obsidian, borderColor: ABIX.ivory12 }}>
-        <div className="mx-auto max-w-7xl px-6 lg:px-10 mb-10 lg:mb-14">
-          <div className="max-w-xl">
-            <Eyebrow light>The Collection</Eyebrow>
-            <h2 className="mt-5 font-display text-4xl sm:text-5xl leading-[1.03] tracking-tight" style={{ color: ABIX.ivory }}>
-              The collection is just beginning.
-            </h2>
-            <p className="mt-5 text-base leading-relaxed" style={{ color: ABIX.ivory45 }}>
-              Shilajit is where ABIXMART begins. These products are coming next.
-            </p>
-          </div>
-        </div>
-        <ComingSoonMarquee />
-      </section>
-
-      {/* ============ FINAL CTA ============ */}
-      <section className="py-24 lg:py-36 border-t" style={{ backgroundColor: ABIX.obsidian, borderColor: ABIX.ivory12 }}>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-100px' }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          className="mx-auto max-w-3xl px-6 lg:px-10 text-center"
-        >
-          <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl leading-[1.05] tracking-tight" style={{ color: ABIX.ivory }}>
-            The collection is only beginning.
-          </h2>
-          <p className="mt-7 text-lg leading-relaxed max-w-xl mx-auto" style={{ color: ABIX.ivory70 }}>
-            Shilajit is where ABIXMART begins. More products will follow — carefully, transparently, and
-            with the same respect for origin and process.
-          </p>
-          <Link
-            to="/shop"
-            className="group mt-10 inline-flex items-center h-14 px-9 text-[12px] font-semibold tracking-luxe-sm uppercase transition-colors duration-300 rounded-full"
-            style={{ backgroundColor: ABIX.gold, color: ABIX.obsidian }}
-          >
-            Explore the shop
-            <span className="ml-3 transition-transform duration-300 group-hover:translate-x-1">→</span>
-          </Link>
-        </motion.div>
-      </section>
+              </div>
+              <ComingSoonMarquee />
+            </div>
+          )}
+          {!showGrowing && <div className="pb-20 lg:pb-28" />}
+        </section>
+      </div>
     </PageTransition>
   );
 }
