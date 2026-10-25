@@ -32,7 +32,7 @@ import Customers from '@/admin/sections/Customers';
 import Orders from '@/admin/sections/Orders';
 import Products from '@/admin/sections/Products';
 import Inquiries from '@/admin/sections/Inquiries';
-import PreOrders from '@/admin/sections/PreOrders';
+import PreOrders from '@/admin/sections/Preorders';
 import Analytics from '@/admin/sections/Analytics';
 import CustomerActivity from '@/admin/sections/CustomerActivity';
 import Acquisition from '@/admin/sections/Acquisition';
