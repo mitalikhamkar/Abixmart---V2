@@ -1,7 +1,7 @@
 // src/components/abix/WhatsGrowingNext.jsx
 import React, { useRef } from 'react';
 import Eyebrow from '@/components/abix/Eyebrow';
-import ProductFamilyScroll from '@/components/abix/upcoming/ProductFamilyScroll';
+import ProductFamilyScroll from '@/components/abix/upcoming/ProductFamilyScroll.jsx';
 import LeafShadow from '@/components/abix/home/LeafShadow';
 import { FOREST } from '@/components/abix/upcoming/livingCollection/theme';
 import { useCatalog } from '@/lib/CatalogContext';
