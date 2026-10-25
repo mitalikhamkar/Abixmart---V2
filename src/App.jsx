@@ -18,7 +18,7 @@ import AuthAction from '@/pages/AuthAction';
 import Cart from '@/pages/Cart';
 import Wishlist from '@/pages/Wishlist';
 import SiteLayout from '@/components/abix/SiteLayout';
-import UpcomingProvider from './components/abix/upcoming/Upcomingprovider.jsx';
+import UpcomingProvider from './components/abix/upcoming/UpcomingProvider.jsx';
 import { ShopProvider } from '@/lib/ShopContext';
 import { CatalogProvider } from '@/lib/CatalogContext';
 import { AuthProvider } from '@/lib/AuthContext';
