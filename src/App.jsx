@@ -6,7 +6,7 @@ import PageNotFound from './lib/PageNotFound';
 import ScrollToTop from './components/ScrollToTop';
 import Home from '@/pages/Home';
 import Shop from '@/pages/Shop';
-import ProductRoute from '@/pages/ProductRoute.jsx';
+import ProductRoute from '@/pages/ProductRoute';
 import HowToTakeShilajit from '@/pages/HowToTakeShilajit';
 import About from '@/pages/About';
 import Support from '@/pages/Support';
@@ -18,7 +18,7 @@ import AuthAction from '@/pages/AuthAction';
 import Cart from '@/pages/Cart';
 import Wishlist from '@/pages/Wishlist';
 import SiteLayout from '@/components/abix/SiteLayout';
-import UpcomingProvider from './components/abix/upcoming/UpcomingProvider.jsx';
+import UpcomingProvider from '@/components/abix/upcoming/UpcomingProvider';
 import { ShopProvider } from '@/lib/ShopContext';
 import { CatalogProvider } from '@/lib/CatalogContext';
 import { AuthProvider } from '@/lib/AuthContext';
@@ -32,7 +32,8 @@ import Customers from '@/admin/sections/Customers';
 import Orders from '@/admin/sections/Orders';
 import Products from '@/admin/sections/Products';
 import Inquiries from '@/admin/sections/Inquiries';
-import PreOrders from '@/admin/sections/Preorders';
+import PreOrders from '@/admin/sections/PreOrders';
+import NotifyRequests from '@/admin/sections/NotifyRequests';
 import Analytics from '@/admin/sections/Analytics';
 import CustomerActivity from '@/admin/sections/CustomerActivity';
 import Acquisition from '@/admin/sections/Acquisition';
@@ -89,6 +90,7 @@ function App() {
                       <Route path="products" element={<Products />} />
                       <Route path="inquiries" element={<Inquiries />} />
                       <Route path="pre-orders" element={<PreOrders />} />
+                      <Route path="notify-requests" element={<NotifyRequests />} />
                       <Route path="reviews" element={<Reviews />} />
                       <Route path="analytics" element={<Analytics />} />
                       <Route path="customer-activity" element={<CustomerActivity />} />
